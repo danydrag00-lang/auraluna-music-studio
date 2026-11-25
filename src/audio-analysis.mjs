@@ -14,3 +14,7 @@ export function analyze(buffer){
 }
 export async function analyzeFile(file){if(file.size>80*1024*1024)throw Error('Use a reference excerpt under 80 MB.');const ctx=new AudioContext();try{return analyze(await ctx.decodeAudioData(await file.arrayBuffer()));}finally{await ctx.close();}}
 export function brief(m){return {complexity:m.quietPercent>20?15:m.variationDb>12?25:35,mood:'sleep',note:'A starting point only; listen before approving. Brightness and loudness do not identify tempo or genre.'};}
+
+// Similarity diagnostics use level-independent features; do not rank musical beauty.
+export function compareProfiles(reference,candidate){const keys=['variationDb','quietPercent','brightness'];return keys.map(key=>{const a=reference[key],b=candidate[key];if(!Number.isFinite(a)||!Number.isFinite(b))throw Error('Invalid audio profile');return {key,reference:a,candidate:b,difference:b-a};});}
+export function auditionGain(reference,candidate){if(!Number.isFinite(reference.rmsDb)||!Number.isFinite(candidate.rmsDb))return 1;return Math.min(1,10**((reference.rmsDb-candidate.rmsDb)/20));}
