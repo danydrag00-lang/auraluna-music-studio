@@ -1,5 +1,5 @@
 // Acoustic relaxation composer: slow harmonic rhythm, intentional silence and melodic voice leading.
-export function compose({seed,mood='spa',seconds=30,instruments=['piano'],complexity=35,natureIntensity=0,tonalRoot=null}){
+export function compose({seed,mood='spa',seconds=30,instruments=['piano'],complexity=35,natureIntensity=0,tonalRoot=null,mix=null}){
  if(!Number.isFinite(seconds)||seconds<15||seconds>600)throw Error('Duration must be 15–600 seconds');
  if(!instruments.length)throw Error('Select an available instrument');
  complexity=Math.max(0,Math.min(100,Number(complexity)||0));natureIntensity=Math.max(0,Math.min(100,Number(natureIntensity)||0));
@@ -20,7 +20,7 @@ export function compose({seed,mood='spa',seconds=30,instruments=['piano'],comple
   if(keyboard){
    const n=complexity<25?2:complexity<70?3:4;
    const tones=[chord[0],chord[1],chord[2],chord[3]];
-   for(let j=0;j<n;j++){const start=t+(j===0?.12:1.2+j*1.25+random()*.22)*beat;note(keyboard.instrument,root+tones[j],start,beat*(j===0?6:4.3),(.14+random()*.045)*(mood==='sleep'?.8:1));}
+   for(let j=0;j<n;j++){const start=t+(j===0?.12:1.2+j*1.25+random()*.22)*beat;note(keyboard.instrument,root+tones[j],start,beat*(j===0?6:4.3),(.14+random()*.045)*(mood==='sleep'?.8:1)*(0.87+0.13*Math.sin((bar%4+1)*Math.PI/5)));}
   }
   for(const r of roles){
    if(r===keyboard)continue;
@@ -38,6 +38,6 @@ export function compose({seed,mood='spa',seconds=30,instruments=['piano'],comple
   }
  }
  events.sort((a,b)=>a.time-b.time);
- return {seed,mood,seconds,tonalRoot:root,instruments:[...instruments],complexity,natureIntensity,events};
+ return {seed,mood,seconds,tonalRoot:root,instruments:[...instruments],complexity,natureIntensity,mix,events};
 }
 export function fingerprint(project){return JSON.stringify(project.events.map(e=>[e.instrument,e.pitch,Math.round(e.time*4),Math.round(e.duration*4)]))}
