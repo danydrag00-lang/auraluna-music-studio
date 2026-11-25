@@ -1,19 +1,19 @@
 import {analyze} from './audio-analysis.mjs';
 export async function render(project,catalog,{measure=false}={}){
  const rate=44100, ctx=new OfflineAudioContext(2,Math.ceil(project.seconds*rate),rate);
- const master=ctx.createGain();master.gain.value=.55;const compressor=ctx.createDynamicsCompressor();const tone=ctx.createBiquadFilter();tone.type='lowpass';tone.frequency.value=project.mood==='sleep'?3400:5200;tone.Q.value=.25;
+ const master=ctx.createGain();master.gain.value=.55;const compressor=ctx.createDynamicsCompressor();const tone=ctx.createBiquadFilter();tone.type='lowpass';tone.frequency.value=project.mix?.tone??(project.mood==='sleep'?3400:5200);tone.Q.value=.25;
  const warmth=ctx.createBiquadFilter();warmth.type='highpass';warmth.frequency.value=45;warmth.Q.value=.5;
  master.connect(warmth);warmth.connect(tone);tone.connect(compressor);compressor.threshold.value=-18;compressor.ratio.value=2;compressor.attack.value=.08;compressor.release.value=.7;compressor.connect(ctx.destination);
  // Quiet early reflections from the original recording only; no generated noise or synth layers.
- for(const [delay,gain,pan] of [[.077,.13,-.55],[.131,.095,.55],[.223,.065,-.3],[.347,.035,.3]]){const d=ctx.createDelay(1),g=ctx.createGain(),p=ctx.createStereoPanner();d.delayTime.value=delay;g.gain.value=gain;p.pan.value=pan;tone.connect(d);d.connect(g);g.connect(p);p.connect(compressor);}
+ for(const [delay,gain,pan] of [[.077,.13,-.55],[.131,.095,.55],[.223,.065,-.3],[.347,.035,.3]]){const d=ctx.createDelay(1),g=ctx.createGain(),p=ctx.createStereoPanner();d.delayTime.value=delay;g.gain.value=gain*(project.mix?.space??1);p.pan.value=pan;tone.connect(d);d.connect(g);g.connect(p);p.connect(compressor);}
  const assets=catalog.filter(a=>a.kind==='note'&&['CC0-1.0','CC-BY-4.0'].includes(a.license)&&a.reviewed===true);
  const cache=new Map();const used=new Map();
  for(const e of project.events){
- const a=assets.filter(x=>x.instrument===e.instrument&&Math.abs(x.pitch-e.pitch)<=3).sort((x,y)=>Math.abs(x.pitch-e.pitch)-Math.abs(y.pitch-e.pitch))[0];
+ const a=assets.filter(x=>x.instrument===e.instrument&&Math.abs(x.pitch-e.pitch)<=3).sort((x,y)=>Math.abs(x.pitch-e.pitch)-Math.abs(y.pitch-e.pitch)||Number(/_v1_/i.test(y.title))-Number(/_v1_/i.test(x.title)))[0];
  if(!a)throw Error('Missing verified sample for '+e.instrument+' MIDI '+e.pitch);
  if(!cache.has(a.id)){const res=await fetch(a.path);if(!res.ok)throw Error('Missing local audio '+a.id);cache.set(a.id,await ctx.decodeAudioData(await res.arrayBuffer()));}
- used.set(a.id,a);const s=ctx.createBufferSource(),g=ctx.createGain();s.buffer=cache.get(a.id);s.playbackRate.value=2**((e.pitch-a.pitch)/12);s.connect(g);const pan=ctx.createStereoPanner();pan.pan.value=/flute|clarinet/i.test(e.instrument)?.18:/cello/i.test(e.instrument)?-.16:/harp/i.test(e.instrument)?-.22:0;g.connect(pan);pan.connect(master);
- const end=Math.min(project.seconds,e.time+e.duration,s.buffer.duration/s.playbackRate.value+e.time);if(end<=e.time)continue;const wind=/flute|clarinet|cello|bansuri/i.test(e.instrument);const attack=Math.min(wind?.28:.10,(end-e.time)/3),release=Math.min(wind?.9:1.8,(end-e.time)/2);g.gain.setValueAtTime(0,e.time);g.gain.linearRampToValueAtTime(e.velocity,e.time+attack);g.gain.setValueAtTime(e.velocity,end-release);g.gain.linearRampToValueAtTime(0,end);s.start(e.time);s.stop(end);
+ used.set(a.id,a);const s=ctx.createBufferSource(),g=ctx.createGain();s.buffer=cache.get(a.id);s.playbackRate.value=2**((e.pitch-a.pitch)/12);s.connect(g);const pan=ctx.createStereoPanner();pan.pan.value=(project.mix?.tracks?.[e.instrument]?.pan??(/flute|clarinet/i.test(e.instrument)?.18:/cello/i.test(e.instrument)?-.16:/harp/i.test(e.instrument)?-.22:0));g.connect(pan);pan.connect(master);
+ const end=Math.min(project.seconds,e.time+e.duration,s.buffer.duration/s.playbackRate.value+e.time);if(end<=e.time)continue;const wind=/flute|clarinet|cello|bansuri/i.test(e.instrument);const attack=Math.min(wind?.28:.10,(end-e.time)/3),release=Math.min(wind?.9:1.8,(end-e.time)/2);g.gain.setValueAtTime(0,e.time);const level=e.velocity*(project.mix?.tracks?.[e.instrument]?.gain??1);g.gain.linearRampToValueAtTime(level,e.time+attack);g.gain.setValueAtTime(level,end-release);g.gain.linearRampToValueAtTime(0,end);s.start(e.time);s.stop(end);
  }
  if(project.natureIntensity>0){
  const candidates=catalog.filter(a=>a.kind==='nature'&&a.reviewed===true&&['CC0-1.0','CC-BY-4.0'].includes(a.license));
