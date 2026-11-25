@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {validateProject,readProjects,writeProjects,renameProject,removeProject} from '../src/projects.mjs';
+const p={seed:3,mood:'spa',seconds:30,instruments:['piano'],complexity:35,natureIntensity:0};
+test('valid project retains settings, not arbitrary event data',()=>{assert.deepEqual(validateProject({...p,events:[{bad:true}]}),p);assert.throws(()=>validateProject({...p,seconds:99999}));});
+test('saved project lifecycle',()=>{let value=null;const storage={getItem:()=>value,setItem:(k,v)=>value=v};writeProjects([{id:'1',name:'First',created:'2026-11-25',project:p}],storage);renameProject('1','New',storage);assert.equal(readProjects(storage)[0].name,'New');removeProject('1',storage);assert.equal(readProjects(storage).length,0);});
