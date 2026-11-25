@@ -1,0 +1,25 @@
+name: Install acoustic pilot
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: acoustic-pilot
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: node --test tests/composer.test.mjs
+      - run: python3 scripts/install_versilian.py
+      - name: Commit actual samples and catalogue
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audio catalog/index.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Install CC0 acoustic pilot recordings"
+            git push origin HEAD:main
+          fi
