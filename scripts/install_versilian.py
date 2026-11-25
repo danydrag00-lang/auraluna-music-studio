@@ -42,7 +42,7 @@ def run():
     rate=w.getframerate(); frames=w.getnframes();channels=w.getnchannels();bits=w.getsampwidth()*8; samples=w.readframes(frames)
     if rate<22050 or frames<rate/4 or channels not in (1,2) or bits not in (16,24,32) or not any(samples):raise ValueError('Invalid WAV '+path)
    target=out/(digest+'.wav');target.write_bytes(raw)
-   rows.append(dict(id=digest,title=path.rsplit('/',1)[-1],creator='Versilian Studios and contributors',source=source,evidence='Official repository CC0-1.0 license at '+commit,license='CC0-1.0',license_url='https://creativecommons.org/publicdomain/zero/1.0/',reviewed=True,review_scope='Source-level license and basic PCM validation; listening review pending',instrument=instrument,kind='note',velocity_layer='soft' if '_v1_' in path else 'unspecified',pitch=midi,path='audio/'+target.name,duration=frames/rate,sample_rate=rate,channels=channels,bit_depth=bits,verified_date=str(datetime.date.today())))
+   rows.append(dict(id=digest,title=path.rsplit('/',1)[-1],creator='Versilian Studios and contributors',source=source,evidence='Official repository CC0-1.0 license at '+commit,license='CC0-1.0',license_url='https://creativecommons.org/publicdomain/zero/1.0/',reviewed=False,pitch_verified=False,review_scope='Source-level license and basic PCM validation; pitch and listening review pending',instrument=instrument,kind='note',velocity_layer='soft' if '_v1_' in path else 'unspecified',pitch=midi,path='audio/'+target.name,duration=frames/rate,sample_rate=rate,channels=channels,bit_depth=bits,verified_date=str(datetime.date.today())))
    ids.add(digest)
   index.write_text(json.dumps(rows,indent=2)+'\n')
   print(instrument,len(notes),'source pitches')
