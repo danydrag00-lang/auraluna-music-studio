@@ -13,9 +13,9 @@ export function compose({seed, mood='spa', seconds=30, instruments=['piano'], co
  const t=bar*4*beat, degree=progression[bar%4]%scale.length;
  const chord=[0,2,4].map(i=>root+scale[(degree+i)%scale.length]+12*Math.floor((degree+i)/scale.length));
  for(let i=0;i<instruments.length;i++){
- const instrument=instruments[i]; if(i>0&&bar%8===7)continue;
- if(i===0&&!modal){for(let j=0;j<(complexity<25?1:complexity<55?2:3);j++){const start=t+j*beat*(.55+random()*.35);if(start<seconds)note(instrument,chord[(j+(bar%4===3?1:0))%3],start,beat*(1.8+random()*.8),.22+random()*.08);}}
- else {const count=complexity<25?1:complexity<65?2:3; for(let j=0;j<count;j++){const start=t+j*beat*(count===3?1.1:1.7)+random()*.07;if(start>=seconds)continue;const d=(motif[(bar+j)%4]+(bar%4===3?1:0))%scale.length;note(instrument,root+12+scale[d],start,beat*(1.1+random()),.24+random()*.12);}}
+ const instrument=instruments[i]; const monophonic=/flute|bansuri|clarinet|saxophone|duduk|ney/i.test(instrument); if(i>0&&bar%8===7)continue;
+ if(i===0&&!modal&&!monophonic){for(let j=0;j<(complexity<25?1:complexity<55?2:3);j++){const start=t+j*beat*(.55+random()*.35);if(start<seconds)note(instrument,chord[(j+(bar%4===3?1:0))%3],start,beat*(1.8+random()*.8),.22+random()*.08);}}
+ else {const count=complexity<25?1:complexity<65?2:3; for(let j=0;j<count;j++){const start=t+j*beat*(count===3?1.1:1.7)+random()*.07;if(start>=seconds)continue;const d=(motif[(bar+j)%4]+(bar%4===3?1:0))%scale.length;note(instrument,root+12+scale[d],start,beat*(monophonic?(count===3?.85:1.45):(1.1+random())),.24+random()*.12);}}
  }
  }
  return {seed,mood,seconds,complexity,natureIntensity,events};
