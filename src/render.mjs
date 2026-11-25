@@ -10,6 +10,14 @@ export async function render(project,catalog){
  used.set(a.id,a);const s=ctx.createBufferSource(),g=ctx.createGain();s.buffer=cache.get(a.id);s.playbackRate.value=2**((e.pitch-a.pitch)/12);s.connect(g);g.connect(master);
  const end=Math.min(project.seconds,e.time+e.duration,s.buffer.duration/s.playbackRate.value+e.time);if(end<=e.time)continue;const attack=Math.min(.05,(end-e.time)/3),release=Math.min(.35,(end-e.time)/3);g.gain.setValueAtTime(0,e.time);g.gain.linearRampToValueAtTime(e.velocity,e.time+attack);g.gain.setValueAtTime(e.velocity,end-release);g.gain.linearRampToValueAtTime(0,end);s.start(e.time);s.stop(end);
  }
+ if(project.natureIntensity>0){
+ const candidates=catalog.filter(a=>a.kind==='nature'&&a.reviewed===true&&['CC0-1.0','CC-BY-4.0'].includes(a.license));
+ if(!candidates.length)throw Error('No verified nature recording available');
+ const a=candidates[project.seed%candidates.length],res=await fetch(a.path);if(!res.ok)throw Error('Nature recording missing');
+ const buffer=await ctx.decodeAudioData(await res.arrayBuffer());if(buffer.duration<2)throw Error('Nature recording too short');
+ used.set(a.id,a);const overlap=Math.min(2,buffer.duration/4),step=buffer.duration-overlap,level=project.natureIntensity/100*.24;
+ for(let start=0;start<project.seconds;start+=step){const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=buffer;source.connect(gain);gain.connect(master);const end=Math.min(project.seconds,start+buffer.duration),fade=Math.min(overlap,(end-start)/2);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(level,start+fade);gain.gain.setValueAtTime(level,end-fade);gain.gain.linearRampToValueAtTime(0,end);source.start(start);source.stop(end);}
+ }
  const audio=await ctx.startRendering();let peak=0;for(let c=0;c<2;c++)for(const x of audio.getChannelData(c))peak=Math.max(peak,Math.abs(x));if(!Number.isFinite(peak)||peak<.0001)throw Error('Silent or invalid render');
  return {blob:wav(audio),peak,licenses:[...used.values()]};
 }
