@@ -1,5 +1,5 @@
 // A thematic acoustic score, not independently randomized note loops.
-export function compose({seed,mood='spa',seconds=30,instruments=['piano'],complexity=35,natureIntensity=0,tonalRoot=null,mix=null}){
+export function compose({seed,mood='spa',seconds=30,instruments=['piano'],complexity=35,natureIntensity=0,tonalRoot=null,mix=null,offsetSeconds=0}){
  if(!Number.isFinite(seconds)||seconds<15||seconds>600)throw Error('Duration must be 15–600 seconds');
  if(!instruments.length)throw Error('Select an available instrument');
  complexity=Math.max(0,Math.min(100,Number(complexity)||0));natureIntensity=Math.max(0,Math.min(100,Number(natureIntensity)||0));
@@ -17,9 +17,9 @@ export function compose({seed,mood='spa',seconds=30,instruments=['piano'],comple
  const wind=n=>/flute|clarinet|bansuri|saxophone|duduk|ney/i.test(n),bow=n=>/cello/i.test(n);
  const keys=instruments.find(n=>!wind(n)&&!bow(n));const lead=instruments.find(wind)||keys||instruments[0];
  const bass=instruments.find(n=>bow(n)&&n!==lead);
- const put=(instrument,pitch,time,duration,velocity,role)=>{if(time>=seconds)return;events.push({instrument,pitch,time,duration:Math.min(duration,seconds-time),velocity,role});};
+ const put=(instrument,pitch,time,duration,velocity,role)=>{if(time>=offsetSeconds+seconds||time+duration<=offsetSeconds)return;const start=Math.max(time,offsetSeconds);events.push({instrument,pitch,time:start-offsetSeconds,duration:Math.min(time+duration,offsetSeconds+seconds)-start,velocity,role,sampleOffset:start-time});};
  const fit=(pitch,lo,hi)=>{while(pitch<lo)pitch+=12;while(pitch>hi)pitch-=12;return pitch};
- for(let bar=0;bar*4*beat<seconds;bar++){
+ for(let bar=0;bar*4*beat<offsetSeconds+seconds;bar++){
   const t=bar*4*beat,k=bar%8,section=Math.floor(bar/8),h=harmony[k],cadence=k===7,shape=.78+.22*Math.sin(Math.PI*(k+1)/9);
   const chord=modal?[degree(h),degree(h+2),degree(h+3)]:[degree(h),degree(h+2),degree(h+4)];
   if(keys&&keys!==lead){put(keys,fit(root+chord[0],54,65),t,beat*3.8,.105*shape,'bass');put(keys,fit(root+chord[1]+12,60,72),t+beat*.15,beat*3.5,.075*shape,'harmony');if(complexity>=35)put(keys,fit(root+chord[2]+12,60,72),t+beat*1.1,beat*2.7,.06*shape,'harmony');}
