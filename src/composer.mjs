@@ -1,5 +1,5 @@
 export function compose({seed, mood='spa', seconds=30, instruments=['piano'], complexity=35, natureIntensity=0}) {
- if(!Number.isFinite(seconds)||seconds<15||seconds>120) throw Error('Preview duration must be 15–120 seconds');
+ if(!Number.isFinite(seconds)||seconds<15||seconds>600) throw Error('Duration must be 15–600 seconds');
  if(!instruments.length) throw Error('Select an available instrument');
  complexity=Math.max(0,Math.min(100,Number(complexity)||0)); natureIntensity=Math.max(0,Math.min(100,Number(natureIntensity)||0));
  let state=seed>>>0; const random=()=>{state=(state+0x6D2B79F5)>>>0;let t=state;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296};
@@ -18,6 +18,6 @@ export function compose({seed, mood='spa', seconds=30, instruments=['piano'], co
  else {const count=complexity<25?1:complexity<65?2:3; for(let j=0;j<count;j++){const start=t+j*beat*(count===3?1.1:1.7)+random()*.07;if(start>=seconds)continue;const d=(motif[(bar+j)%4]+(bar%4===3?1:0))%scale.length;note(instrument,root+12+scale[d],start,beat*(monophonic?(count===3?.85:1.45):(1.1+random())),.24+random()*.12);}}
  }
  }
- return {seed,mood,seconds,complexity,natureIntensity,events};
+ return {seed,mood,seconds,instruments:[...instruments],complexity,natureIntensity,events};
 }
 export function fingerprint(project){return JSON.stringify(project.events.map(e=>[e.instrument,e.pitch,Math.round(e.time*4),Math.round(e.duration*4)]))}
