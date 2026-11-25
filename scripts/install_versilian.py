@@ -1,11 +1,13 @@
 """Install a bounded CC0 pilot from the official Versilian repositories.
 Run with Python 3 and network access. Downloads real source WAVs, never synthesizes replacements.
 """
-import pathlib,json,urllib.request,urllib.parse,re,hashlib,wave,datetime,io
+import os,pathlib,json,urllib.request,urllib.parse,re,hashlib,wave,datetime,io
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 SOURCES=[('sgossner/VCSL','Chordophones/Zithers/Grand Piano, Kawai/Sustains/','acoustic grand piano','GPiano_sus_'),('sgossner/VSCO-2-CE','Woodwinds/Flute/susvib/','concert flute','LDFlute_susvib_'),('sgossner/VSCO-2-CE','Strings/Harp/','harp','KSHarp_'),('sgossner/VSCO-2-CE','Strings/Cello Section/susvib/','cello section','susvib_'),('sgossner/VSCO-2-CE','Woodwinds/Clarinet/susLong/','clarinet','DCClar_susLong_')]
 def get(url):
- req=urllib.request.Request(url,headers={'User-Agent':'AuralunaMusicStudio/1.0'})
+ headers={'User-Agent':'AuralunaMusicStudio/1.0'}
+ if url.startswith('https://api.github.com/') and os.environ.get('GH_TOKEN'):headers['Authorization']='Bearer '+os.environ['GH_TOKEN']
+ req=urllib.request.Request(url,headers=headers)
  with urllib.request.urlopen(req,timeout=60) as r:
   data=r.read(25*1024*1024+1)
   if len(data)>25*1024*1024:raise ValueError('File exceeds pilot limit')
