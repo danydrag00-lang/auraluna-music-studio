@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {normalizeMix,audibleTrack} from '../src/mix.mjs';
+test('solo and mute routing',()=>{const m=normalizeMix({tracks:{piano:{solo:true},flute:{}}},['piano','flute']);assert.equal(audibleTrack(m,'piano'),true);assert.equal(audibleTrack(m,'flute'),false);m.tracks.piano.mute=true;assert.equal(audibleTrack(m,'piano'),false);assert.equal(audibleTrack(m,'flute'),true);});
+test('mixer bounds and zero gain',()=>{const m=normalizeMix({master:2,tracks:{piano:{gain:0,pan:4,eq:-20}}},['piano']);assert.equal(m.master,1);assert.equal(m.tracks.piano.pan,1);assert.equal(m.tracks.piano.eq,-9);assert.equal(audibleTrack(m,'piano'),false);});
