@@ -1617,5 +1617,160 @@
       "run": 45721087096
     },
     "pitch_verified": false
+  },
+  {
+    "id": "8375fe0e350783307f390e3c0fcedbb46e1547679111b2f71f6c6681e66c8c49",
+    "title": "Chopin Nocturne No. 2 \u2014 Peter Johnston",
+    "creator": "Peter Johnston",
+    "source": "https://commons.wikimedia.org/wiki/File:Chopin_Nocturne_No._2_in_E_Flat_Major,_Op._9.ogg",
+    "license": "CC0-1.0",
+    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "evidence": {
+      "source_sha1": "2c27d9180690551cb8c4e05a5b69a92026f6fff9",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/0/04/Chopin_Nocturne_No._2_in_E_Flat_Major%2C_Op._9.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "composition",
+    "instrument": "acoustic grand piano",
+    "path": "audio/8375fe0e350783307f390e3c0fcedbb46e1547679111b2f71f6c6681e66c8c49.wav",
+    "duration": 259.24126984126985,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.73175048828125,
+      "rms": 0.13068153386782969,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-25"
+  },
+  {
+    "id": "0b198940a91e1d626354d5423dee048cf9e4afb27688af9855e7cd014f003eef",
+    "title": "The rain song \u2014 pure piano version",
+    "creator": "Zero Project",
+    "source": "https://commons.wikimedia.org/wiki/File:Zero-project_-_02_-_The_rain_song_(pure_piano_version).ogg",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0",
+    "evidence": {
+      "source_sha1": "e0503c11d0a695add3d38715201f8d2693539536",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/7/78/Zero-project_-_02_-_The_rain_song_%28pure_piano_version%29.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC BY 4.0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "composition",
+    "instrument": "piano",
+    "path": "audio/0b198940a91e1d626354d5423dee048cf9e4afb27688af9855e7cd014f003eef.wav",
+    "duration": 160.80002267573695,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.7318115234375,
+      "rms": 0.09220726818676256,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-25"
+  },
+  {
+    "id": "c3b0caa56acc9c35ed819ebe8053a63513202b61d888e949cbf8ff5cbe8b80bf",
+    "title": "The rain song 2 \u2014 pure piano version",
+    "creator": "zero-project",
+    "source": "https://commons.wikimedia.org/wiki/File:Zero-project_-_02_-_The_rain_song_2_(pure_piano_version).ogg",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0",
+    "evidence": {
+      "source_sha1": "efb535cdc3ba9142963391414695273810de68ee",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/6/6e/Zero-project_-_02_-_The_rain_song_2_%28pure_piano_version%29.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC BY 4.0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "composition",
+    "instrument": "piano",
+    "path": "audio/c3b0caa56acc9c35ed819ebe8053a63513202b61d888e949cbf8ff5cbe8b80bf.wav",
+    "duration": 242.0,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.8243408203125,
+      "rms": 0.11476291907101992,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-25"
+  },
+  {
+    "id": "7fe553a0d4055b31e269d111b0327bc59f534657cd84ce975435591bd2ce2306",
+    "title": "James River Rapids",
+    "creator": "Jarrod stanley",
+    "source": "https://commons.wikimedia.org/wiki/File:James_River_Rapids_3.ogg",
+    "license": "CC0-1.0",
+    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "evidence": {
+      "source_sha1": "b975fd7e5514b0bd0b67f1b84f2fa360bf5a060e",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/d/de/James_River_Rapids_3.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "nature",
+    "instrument": "river",
+    "path": "audio/7fe553a0d4055b31e269d111b0327bc59f534657cd84ce975435591bd2ce2306.wav",
+    "duration": 300.0,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 1.0,
+      "rms": 0.21228945836112645,
+      "clipped_fraction": 1.201814058956916e-05
+    },
+    "verified_date": "2026-11-25"
+  },
+  {
+    "id": "d520f25d4092609acd66012cac2e3557789112681701d3e516722af70a6a9a39",
+    "title": "Swale field recording",
+    "creator": "Ksd5",
+    "source": "https://commons.wikimedia.org/wiki/File:Swale.ogg",
+    "license": "CC0-1.0",
+    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "evidence": {
+      "source_sha1": "4f97748c715d90fda6357073f14a12e68f294d73",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/8/84/Swale.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "nature",
+    "instrument": "river",
+    "path": "audio/d520f25d4092609acd66012cac2e3557789112681701d3e516722af70a6a9a39.wav",
+    "duration": 31.028163265306123,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.46240234375,
+      "rms": 0.02331174169623699,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-25"
   }
 ]
