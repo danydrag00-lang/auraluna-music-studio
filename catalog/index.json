@@ -11,13 +11,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 46,
+    "pitch": 58,
     "path": "audio/1de35d91b4a5623b13433beab9d137e01ad99e2156cf5369d2800ff6e0c44b78.wav",
     "duration": 21.715419501133788,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 46,
+    "pitch_audit": {
+      "measured_midi": 57.9495153836978,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -5,
+    "pitch_verified": true
   },
   {
     "id": "fce33012fe900309abafd1a4d6d254d142b0cbf33834c7a72c2fd1ada4e746e1",
@@ -31,13 +39,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 48,
+    "pitch": 60,
     "path": "audio/fce33012fe900309abafd1a4d6d254d142b0cbf33834c7a72c2fd1ada4e746e1.wav",
     "duration": 24.281655328798188,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 48,
+    "pitch_audit": {
+      "measured_midi": 59.976509855565666,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -2,
+    "pitch_verified": true
   },
   {
     "id": "72f04ebb9fe1e05c95f891d1fb3141d459a810e9757ba80ae89d5badb0ddb4b3",
@@ -51,13 +67,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 50,
+    "pitch": 62,
     "path": "audio/72f04ebb9fe1e05c95f891d1fb3141d459a810e9757ba80ae89d5badb0ddb4b3.wav",
     "duration": 24.19451247165533,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 50,
+    "pitch_audit": {
+      "measured_midi": 61.92496872379883,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -8,
+    "pitch_verified": true
   },
   {
     "id": "51727d51e9174cd141ea202e25871a56fbd32f799d7f440d7bbeba0f1d29dc7c",
@@ -71,13 +95,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 52,
+    "pitch": 64,
     "path": "audio/51727d51e9174cd141ea202e25871a56fbd32f799d7f440d7bbeba0f1d29dc7c.wav",
     "duration": 15.277278911564625,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 52,
+    "pitch_audit": {
+      "measured_midi": 63.95143017832918,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -5,
+    "pitch_verified": true
   },
   {
     "id": "85d36c877c730b1a20ac487c598475cf9d50d2a710abef19ab1d9f45ab4c3cae",
@@ -91,13 +123,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 54,
+    "pitch": 66,
     "path": "audio/85d36c877c730b1a20ac487c598475cf9d50d2a710abef19ab1d9f45ab4c3cae.wav",
     "duration": 22.094648526077098,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 54,
+    "pitch_audit": {
+      "measured_midi": 65.91847134764993,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -8,
+    "pitch_verified": true
   },
   {
     "id": "5d2c5634dbed1cbd2f760d756f045247089b2e2962184fa3fcf47cf9c8fd4277",
@@ -111,13 +151,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 56,
+    "pitch": 68,
     "path": "audio/5d2c5634dbed1cbd2f760d756f045247089b2e2962184fa3fcf47cf9c8fd4277.wav",
     "duration": 18.550453514739228,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 56,
+    "pitch_audit": {
+      "measured_midi": 67.9639273919569,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -4,
+    "pitch_verified": true
   },
   {
     "id": "3465aff6bcc622a7025fa0a0006d9aa1aeb378a6cd7ccda662225bf748e6e9f0",
@@ -131,13 +179,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 58,
+    "pitch": 70,
     "path": "audio/3465aff6bcc622a7025fa0a0006d9aa1aeb378a6cd7ccda662225bf748e6e9f0.wav",
     "duration": 18.893038548752834,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 58,
+    "pitch_audit": {
+      "measured_midi": 69.93841685200131,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -6,
+    "pitch_verified": true
   },
   {
     "id": "69845de40a38ed6501746520f9f385ae56200a4372faed48178e64a32a75e58c",
@@ -151,13 +207,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 60,
+    "pitch": 72,
     "path": "audio/69845de40a38ed6501746520f9f385ae56200a4372faed48178e64a32a75e58c.wav",
     "duration": 14.818208616780046,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 60,
+    "pitch_audit": {
+      "measured_midi": 71.95040138665559,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -5,
+    "pitch_verified": true
   },
   {
     "id": "7eee232754d6e6b6b6f060b52758a971e60c2a0c651bfb1d0164b21fb32aa9ae",
@@ -171,13 +235,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 62,
+    "pitch": 74,
     "path": "audio/7eee232754d6e6b6b6f060b52758a971e60c2a0c651bfb1d0164b21fb32aa9ae.wav",
     "duration": 18.430340136054422,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 62,
+    "pitch_audit": {
+      "measured_midi": 74.0056591964798,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 1,
+    "pitch_verified": true
   },
   {
     "id": "0b3357ea1c4313d196defebd8d1f02291889c6d1484f94652fa68b82768315c8",
@@ -191,13 +263,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 64,
+    "pitch": 76,
     "path": "audio/0b3357ea1c4313d196defebd8d1f02291889c6d1484f94652fa68b82768315c8.wav",
     "duration": 12.12795918367347,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 64,
+    "pitch_audit": {
+      "measured_midi": 75.99270948202187,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -1,
+    "pitch_verified": true
   },
   {
     "id": "e2a6b1ca1b0919cf04fd3023004f352b588f471ff68543ac546726c134659cb8",
@@ -211,13 +291,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 66,
+    "pitch": 78,
     "path": "audio/e2a6b1ca1b0919cf04fd3023004f352b588f471ff68543ac546726c134659cb8.wav",
     "duration": 11.944829931972789,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 66,
+    "pitch_audit": {
+      "measured_midi": 77.98218534005014,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -2,
+    "pitch_verified": true
   },
   {
     "id": "5a90fad68dbcd5610412bd23838c8c70b2fc1acd268980ae66773d595e9b1aa0",
@@ -231,13 +319,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 68,
+    "pitch": 80,
     "path": "audio/5a90fad68dbcd5610412bd23838c8c70b2fc1acd268980ae66773d595e9b1aa0.wav",
     "duration": 10.831927437641724,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 68,
+    "pitch_audit": {
+      "measured_midi": 79.97284082915823,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -3,
+    "pitch_verified": true
   },
   {
     "id": "5fdd61e4eafa7ee90325ac6a7380c87f4115d30d88f722f3f8a0b9fbd39e0b6e",
@@ -251,13 +347,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 70,
+    "pitch": 82,
     "path": "audio/5fdd61e4eafa7ee90325ac6a7380c87f4115d30d88f722f3f8a0b9fbd39e0b6e.wav",
     "duration": 13.226439909297053,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 70,
+    "pitch_audit": {
+      "measured_midi": 82.00495775062987,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 0,
+    "pitch_verified": true
   },
   {
     "id": "00cd9f702d90dc69c366ced45f45fdc2742e7cae636c63b5b0e1958a04bd362d",
@@ -271,13 +375,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 71,
+    "pitch": 83,
     "path": "audio/00cd9f702d90dc69c366ced45f45fdc2742e7cae636c63b5b0e1958a04bd362d.wav",
     "duration": 8.413197278911564,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 71,
+    "pitch_audit": {
+      "measured_midi": 83.01926369230094,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 2,
+    "pitch_verified": true
   },
   {
     "id": "f56e64651eed9bdc88abb53eff3beb9a6e89d787f29fef7758f04b6da09397c9",
@@ -291,13 +403,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 72,
+    "pitch": 84,
     "path": "audio/f56e64651eed9bdc88abb53eff3beb9a6e89d787f29fef7758f04b6da09397c9.wav",
     "duration": 9.674489795918367,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 72,
+    "pitch_audit": {
+      "measured_midi": 83.99923504937794,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 0,
+    "pitch_verified": true
   },
   {
     "id": "abfcf351629a78007bb80c086e67ce634e38a5f96393907c480f2c2648ced1ce",
@@ -311,13 +431,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 75,
+    "pitch": 87,
     "path": "audio/abfcf351629a78007bb80c086e67ce634e38a5f96393907c480f2c2648ced1ce.wav",
     "duration": 4.872199546485261,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 75,
+    "pitch_audit": {
+      "measured_midi": 86.97143872079812,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -3,
+    "pitch_verified": true
   },
   {
     "id": "12235267e757ee9ced77756cb705ca1dfbdeba42a4996e7a88c5a0e81843b038",
@@ -331,13 +459,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 78,
+    "pitch": 90,
     "path": "audio/12235267e757ee9ced77756cb705ca1dfbdeba42a4996e7a88c5a0e81843b038.wav",
     "duration": 5.671859410430839,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 78,
+    "pitch_audit": {
+      "measured_midi": 89.98409931472867,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -2,
+    "pitch_verified": true
   },
   {
     "id": "754e99753db108b131970fb840b712f81a1893b0c2ad6e6771f61f1793620d3c",
@@ -351,13 +487,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 81,
+    "pitch": 93,
     "path": "audio/754e99753db108b131970fb840b712f81a1893b0c2ad6e6771f61f1793620d3c.wav",
     "duration": 5.123151927437641,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 81,
+    "pitch_audit": {
+      "measured_midi": 93.12894904060339,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 13,
+    "pitch_verified": true
   },
   {
     "id": "073631c8442b275d803e608e840c2ce6cad3b08320018e08510cf3cb57373154",
@@ -371,13 +515,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 48,
+    "pitch": 60,
     "path": "audio/073631c8442b275d803e608e840c2ce6cad3b08320018e08510cf3cb57373154.wav",
     "duration": 7.889229024943311,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 48,
+    "pitch_audit": {
+      "measured_midi": 60.00918978214864,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 1,
+    "pitch_verified": true
   },
   {
     "id": "831386b21a704a5fccf204b18a536d638ea191f1b56662200192241215e21abd",
@@ -391,13 +543,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 52,
+    "pitch": 64,
     "path": "audio/831386b21a704a5fccf204b18a536d638ea191f1b56662200192241215e21abd.wav",
     "duration": 10.587301587301587,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 52,
+    "pitch_audit": {
+      "measured_midi": 64.01191325677273,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 1,
+    "pitch_verified": true
   },
   {
     "id": "4ea04a7a2ba152752e1b475798619a62f2546f54972caa6ddcd88f29a2046c81",
@@ -411,13 +571,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 57,
+    "pitch": 69,
     "path": "audio/4ea04a7a2ba152752e1b475798619a62f2546f54972caa6ddcd88f29a2046c81.wav",
     "duration": 7.99875283446712,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 57,
+    "pitch_audit": {
+      "measured_midi": 68.95362946673876,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -5,
+    "pitch_verified": true
   },
   {
     "id": "e88a0ff35e6b8c29fd88bc778a4c817d955b2c3a2934def97a7d093b72e2ae97",
@@ -431,13 +599,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 60,
+    "pitch": 72,
     "path": "audio/e88a0ff35e6b8c29fd88bc778a4c817d955b2c3a2934def97a7d093b72e2ae97.wav",
     "duration": 7.593265306122449,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 60,
+    "pitch_audit": {
+      "measured_midi": 72.02363029721286,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 2,
+    "pitch_verified": true
   },
   {
     "id": "83d4eed0c54ebfe25fe9dfb0475fb90a88a43d11777bc2afac879b8b695e494c",
@@ -451,13 +627,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 64,
+    "pitch": 76,
     "path": "audio/83d4eed0c54ebfe25fe9dfb0475fb90a88a43d11777bc2afac879b8b695e494c.wav",
     "duration": 8.103038548752835,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 64,
+    "pitch_audit": {
+      "measured_midi": 76.02258040203606,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 2,
+    "pitch_verified": true
   },
   {
     "id": "cf3c1c30943b8b8ef8b5b9ced89430c014987a037204098d002f86e424391ba9",
@@ -471,13 +655,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 69,
+    "pitch": 81,
     "path": "audio/cf3c1c30943b8b8ef8b5b9ced89430c014987a037204098d002f86e424391ba9.wav",
     "duration": 7.338027210884354,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 69,
+    "pitch_audit": {
+      "measured_midi": 81.06158835854052,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 6,
+    "pitch_verified": true
   },
   {
     "id": "ecb78c59069866ea7c3327594851827cd2f50c5d411aad422269a88e53614fbe",
@@ -491,13 +683,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 72,
+    "pitch": 84,
     "path": "audio/ecb78c59069866ea7c3327594851827cd2f50c5d411aad422269a88e53614fbe.wav",
     "duration": 7.295102040816326,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 72,
+    "pitch_audit": {
+      "measured_midi": 83.97189816031583,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -3,
+    "pitch_verified": true
   },
   {
     "id": "6eab0a4827c43b49415cb0c846affd40e9555c884c74683422554923faf17681",
@@ -507,8 +707,8 @@
     "evidence": "Official repository CC0-1.0 license at 440300901dfe9275fd84e0b7763af1f8443ae62e",
     "license": "CC0-1.0",
     "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-    "reviewed": true,
-    "review_scope": "Source-level license and basic PCM validation; listening review pending",
+    "reviewed": false,
+    "review_scope": "Source-level license and basic PCM validation; listening review pending; pitch estimate inconclusive or inconsistent with instrument group; excluded pending verification",
     "instrument": "concert flute",
     "kind": "note",
     "pitch": 76,
@@ -517,7 +717,14 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 76,
+    "pitch_audit": {
+      "measured_midi": 76.03114948713447,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "pitch_verified": false
   },
   {
     "id": "067a42df19ec1864389c28235a6794033471c0ffa3d7e16637396a505ca7d7fd",
@@ -531,13 +738,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "concert flute",
     "kind": "note",
-    "pitch": 81,
+    "pitch": 93,
     "path": "audio/067a42df19ec1864389c28235a6794033471c0ffa3d7e16637396a505ca7d7fd.wav",
     "duration": 5.506507936507936,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 81,
+    "pitch_audit": {
+      "measured_midi": 93.11234994710713,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 11,
+    "pitch_verified": true
   },
   {
     "id": "45be0b87b88a6789550f849da90c2b085bd7976e183850f5f359bbc843c41d64",
@@ -551,13 +766,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 42,
+    "pitch": 54,
     "path": "audio/45be0b87b88a6789550f849da90c2b085bd7976e183850f5f359bbc843c41d64.wav",
     "duration": 23.69612244897959,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 42,
+    "pitch_audit": {
+      "measured_midi": 53.96652441888119,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -3,
+    "pitch_verified": true
   },
   {
     "id": "f3447b7e8a841de457cc77f68919c9d8005f7859201253f7a76982819c96d4f9",
@@ -571,13 +794,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "acoustic grand piano",
     "kind": "note",
-    "pitch": 44,
+    "pitch": 56,
     "path": "audio/f3447b7e8a841de457cc77f68919c9d8005f7859201253f7a76982819c96d4f9.wav",
     "duration": 22.605419501133788,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 44,
+    "pitch_audit": {
+      "measured_midi": 55.95586912218104,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -4,
+    "pitch_verified": true
   },
   {
     "id": "1df9f4d138ca3931fcb458bcdf01304cadf2e5f4eef67bbc17b0e42c0e60fce6",
@@ -597,7 +828,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 45,
+    "pitch_audit": {
+      "measured_midi": 44.956516633395076,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -4,
+    "pitch_verified": true
   },
   {
     "id": "e5d232771704e140959819de8cf2a3e0ba49d021ca77354c42664ce4fce6d9f3",
@@ -617,7 +856,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 48,
+    "pitch_audit": {
+      "measured_midi": 47.97443341667932,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -3,
+    "pitch_verified": true
   },
   {
     "id": "aafa9d41ec0f77da8f2891055af8b3f9557e0ba1f1df93d53ae6e1fda07afae5",
@@ -637,7 +884,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 52,
+    "pitch_audit": {
+      "measured_midi": 51.95328671664025,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -5,
+    "pitch_verified": true
   },
   {
     "id": "62600eb1b37bc2829ca65351f7ca7e506c9ae472abd5bea0765a8b8fa7df2772",
@@ -657,7 +912,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 55,
+    "pitch_audit": {
+      "measured_midi": 54.92414173363068,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -8,
+    "pitch_verified": true
   },
   {
     "id": "f6f71be8c640822ef48a448b245585659acdfcc7ed5774e10f37be2fc02fcab4",
@@ -677,7 +940,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 59,
+    "pitch_audit": {
+      "measured_midi": 58.875090809265174,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -12,
+    "pitch_verified": true
   },
   {
     "id": "ebfde8aab4411019e37e3426f4dd88d6a52a38c2d0261d7f10ec63d8ff584dc7",
@@ -697,7 +968,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 62,
+    "pitch_audit": {
+      "measured_midi": 61.8806823488673,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -12,
+    "pitch_verified": true
   },
   {
     "id": "db27ebbb37334c10e06f2ae63f4d9ff555e4d11704fcc6f0bcf503863867e577",
@@ -717,7 +996,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 65,
+    "pitch_audit": {
+      "measured_midi": 64.99548789393613,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": 0,
+    "pitch_verified": true
   },
   {
     "id": "3665f3975cad4a33f46784aa4f896f4b4319ba2b7831e892d975bc38c9f09f23",
@@ -737,7 +1024,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 69,
+    "pitch_audit": {
+      "measured_midi": 68.88924078408886,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -11,
+    "pitch_verified": true
   },
   {
     "id": "7c8b862f6fd3f1442ed87537af976d84bda8c05a5b4900e8907d570b5202a517",
@@ -757,7 +1052,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 72,
+    "pitch_audit": {
+      "measured_midi": 71.89657958263356,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -10,
+    "pitch_verified": true
   },
   {
     "id": "95dd9ddb0bd15bee7687906e00f25aafcaa43020cc9501f0e8b6cabf0e9a53ec",
@@ -777,7 +1080,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 76,
+    "pitch_audit": {
+      "measured_midi": 75.90941018942569,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -9,
+    "pitch_verified": true
   },
   {
     "id": "f2004dfc617997fbabc6f849add2af06f4f859361c44a8fca0f993dc7f999540",
@@ -797,7 +1108,15 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 79,
+    "pitch_audit": {
+      "measured_midi": 78.9555083698234,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "tuning_cents": -4,
+    "pitch_verified": true
   },
   {
     "id": "e8640dec9febc6e39fcf06b19d2c95a85d5ff8c38f13c9879e69f551eaf38ab8",
@@ -811,13 +1130,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 38,
+    "pitch": 50,
     "path": "audio/e8640dec9febc6e39fcf06b19d2c95a85d5ff8c38f13c9879e69f551eaf38ab8.wav",
     "duration": 9.64063492063492,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 38,
+    "pitch_audit": {
+      "measured_midi": 50.0312972773344,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 3,
+    "pitch_verified": true
   },
   {
     "id": "162054eab4ba118924f8f8986cf1b17ccfd65211d1945743ffbae30b4953f901",
@@ -831,13 +1158,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 41,
+    "pitch": 53,
     "path": "audio/162054eab4ba118924f8f8986cf1b17ccfd65211d1945743ffbae30b4953f901.wav",
     "duration": 8.26140589569161,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 41,
+    "pitch_audit": {
+      "measured_midi": 53.00663792247438,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 1,
+    "pitch_verified": true
   },
   {
     "id": "c97a003184fdcb153d6b6c0bae8d82a90592a1b04b06bd7caaeda8b9776d5284",
@@ -851,13 +1186,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 45,
+    "pitch": 57,
     "path": "audio/c97a003184fdcb153d6b6c0bae8d82a90592a1b04b06bd7caaeda8b9776d5284.wav",
     "duration": 8.831043083900227,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 45,
+    "pitch_audit": {
+      "measured_midi": 56.9823451379406,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -2,
+    "pitch_verified": true
   },
   {
     "id": "a614ee7ca821b44660236e47b89620cf914ec6ad27a99bc0d9764f47dbe512e1",
@@ -871,13 +1214,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 48,
+    "pitch": 60,
     "path": "audio/a614ee7ca821b44660236e47b89620cf914ec6ad27a99bc0d9764f47dbe512e1.wav",
     "duration": 9.237074829931974,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 48,
+    "pitch_audit": {
+      "measured_midi": 60.011370343585696,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 1,
+    "pitch_verified": true
   },
   {
     "id": "d2f961e30bf64021cf4acbd88e0e7a1fd1840943ae78c62a711bcce3d109216e",
@@ -891,13 +1242,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 52,
+    "pitch": 64,
     "path": "audio/d2f961e30bf64021cf4acbd88e0e7a1fd1840943ae78c62a711bcce3d109216e.wav",
     "duration": 9.284308390022677,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 52,
+    "pitch_audit": {
+      "measured_midi": 63.99358437790657,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -1,
+    "pitch_verified": true
   },
   {
     "id": "8d658346b8d2054fd534b3222b5d7a23196d22a83a68c3a04ffb76b21853a3db",
@@ -911,13 +1270,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 55,
+    "pitch": 67,
     "path": "audio/8d658346b8d2054fd534b3222b5d7a23196d22a83a68c3a04ffb76b21853a3db.wav",
     "duration": 9.18954648526077,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 55,
+    "pitch_audit": {
+      "measured_midi": 66.98346551155925,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -2,
+    "pitch_verified": true
   },
   {
     "id": "bd25d66c1c4e73f5827bf3b931244e51ec8388594d8004529a762be81258097f",
@@ -931,13 +1298,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "cello section",
     "kind": "note",
-    "pitch": 59,
+    "pitch": 71,
     "path": "audio/bd25d66c1c4e73f5827bf3b931244e51ec8388594d8004529a762be81258097f.wav",
     "duration": 6.387142857142857,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 59,
+    "pitch_audit": {
+      "measured_midi": 70.96076299823139,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -4,
+    "pitch_verified": true
   },
   {
     "id": "b4aa3a7fec1f0e783fa560f493868c17045feb271738e3d6834d1b00594b1c38",
@@ -947,8 +1322,8 @@
     "evidence": "Official repository CC0-1.0 license at 440300901dfe9275fd84e0b7763af1f8443ae62e",
     "license": "CC0-1.0",
     "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-    "reviewed": true,
-    "review_scope": "Source-level license and basic PCM validation; listening review pending",
+    "reviewed": false,
+    "review_scope": "Source-level license and basic PCM validation; listening review pending; pitch estimate inconclusive or inconsistent with instrument group; excluded pending verification",
     "instrument": "cello section",
     "kind": "note",
     "pitch": 62,
@@ -957,7 +1332,14 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 62,
+    "pitch_audit": {
+      "measured_midi": null,
+      "octave_shift": null,
+      "run": 45721087096
+    },
+    "pitch_verified": false
   },
   {
     "id": "a9888547b4b684c7649a882e693d61964848f18401a18e4646a8449b40c08bad",
@@ -967,8 +1349,8 @@
     "evidence": "Official repository CC0-1.0 license at 440300901dfe9275fd84e0b7763af1f8443ae62e",
     "license": "CC0-1.0",
     "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-    "reviewed": true,
-    "review_scope": "Source-level license and basic PCM validation; listening review pending",
+    "reviewed": false,
+    "review_scope": "Source-level license and basic PCM validation; listening review pending; pitch estimate inconclusive or inconsistent with instrument group; excluded pending verification",
     "instrument": "cello section",
     "kind": "note",
     "pitch": 65,
@@ -977,7 +1359,14 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 24,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 65,
+    "pitch_audit": {
+      "measured_midi": 65.00644426471088,
+      "octave_shift": 0,
+      "run": 45721087096
+    },
+    "pitch_verified": false
   },
   {
     "id": "82be872b7915c833e06910846e3398b55591f69bfe6474c39dd4051742db2700",
@@ -991,13 +1380,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 46,
+    "pitch": 58,
     "path": "audio/82be872b7915c833e06910846e3398b55591f69bfe6474c39dd4051742db2700.wav",
     "duration": 10.823945578231292,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 46,
+    "pitch_audit": {
+      "measured_midi": 58.00373614750128,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 0,
+    "pitch_verified": true
   },
   {
     "id": "30e686ffc58caa48bbfae309a06f1c27c75b192fb653729ffdf8586cbd9b8405",
@@ -1011,13 +1408,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 50,
+    "pitch": 62,
     "path": "audio/30e686ffc58caa48bbfae309a06f1c27c75b192fb653729ffdf8586cbd9b8405.wav",
     "duration": 10.635736961451247,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 50,
+    "pitch_audit": {
+      "measured_midi": 62.01985770471755,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 2,
+    "pitch_verified": true
   },
   {
     "id": "3c9a237651cd049cacdf4052ef85ff406da1d9e5d4f59439c20f45a7578ff431",
@@ -1031,13 +1436,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 53,
+    "pitch": 65,
     "path": "audio/3c9a237651cd049cacdf4052ef85ff406da1d9e5d4f59439c20f45a7578ff431.wav",
     "duration": 11.732018140589568,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 53,
+    "pitch_audit": {
+      "measured_midi": 65.05097505359583,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 5,
+    "pitch_verified": true
   },
   {
     "id": "779e2cad84f6f5103272f17cb4637a94d8e9c533a5811233595960cad61b391f",
@@ -1051,13 +1464,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 58,
+    "pitch": 70,
     "path": "audio/779e2cad84f6f5103272f17cb4637a94d8e9c533a5811233595960cad61b391f.wav",
     "duration": 10.15360544217687,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 58,
+    "pitch_audit": {
+      "measured_midi": 70.00588230346692,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 1,
+    "pitch_verified": true
   },
   {
     "id": "4bdc53f3ef917cc9146e10cec5eb33744524e8b510c4a39c080dc5c774b3c956",
@@ -1071,13 +1492,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 62,
+    "pitch": 74,
     "path": "audio/4bdc53f3ef917cc9146e10cec5eb33744524e8b510c4a39c080dc5c774b3c956.wav",
     "duration": 11.578798185941043,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 62,
+    "pitch_audit": {
+      "measured_midi": 74.02641497376786,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 3,
+    "pitch_verified": true
   },
   {
     "id": "9988142d8fd2856af4217e3983316a42ef1d91b6381afd9fa138072d91122c2e",
@@ -1087,8 +1516,8 @@
     "evidence": "Official repository CC0-1.0 license at 440300901dfe9275fd84e0b7763af1f8443ae62e",
     "license": "CC0-1.0",
     "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-    "reviewed": true,
-    "review_scope": "Source-level license and basic PCM validation; listening review pending",
+    "reviewed": false,
+    "review_scope": "Source-level license and basic PCM validation; listening review pending; pitch estimate inconclusive or inconsistent with instrument group; excluded pending verification",
     "instrument": "clarinet",
     "kind": "note",
     "pitch": 65,
@@ -1097,7 +1526,14 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 65,
+    "pitch_audit": {
+      "measured_midi": null,
+      "octave_shift": null,
+      "run": 45721087096
+    },
+    "pitch_verified": false
   },
   {
     "id": "569e902693e7d04ecd20507f0a3dd0be92a7a3cdf14ab685d89aefacff2a34cb",
@@ -1111,13 +1547,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 70,
+    "pitch": 82,
     "path": "audio/569e902693e7d04ecd20507f0a3dd0be92a7a3cdf14ab685d89aefacff2a34cb.wav",
     "duration": 10.335464852607709,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 70,
+    "pitch_audit": {
+      "measured_midi": 81.9701885259454,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": -3,
+    "pitch_verified": true
   },
   {
     "id": "4cedd1d7bd779fe357529e34ff398bc0e80c5088fc3908944962d65fcdc94823",
@@ -1131,13 +1575,21 @@
     "review_scope": "Source-level license and basic PCM validation; listening review pending",
     "instrument": "clarinet",
     "kind": "note",
-    "pitch": 74,
+    "pitch": 86,
     "path": "audio/4cedd1d7bd779fe357529e34ff398bc0e80c5088fc3908944962d65fcdc94823.wav",
     "duration": 10.046371882086168,
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 74,
+    "pitch_audit": {
+      "measured_midi": 86.12227208821176,
+      "octave_shift": 12,
+      "run": 45721087096
+    },
+    "tuning_cents": 12,
+    "pitch_verified": true
   },
   {
     "id": "2f024789f1b2ecc25f0e07dcff06084e4c2def83ff74e693c098c28fbec319fc",
@@ -1147,8 +1599,8 @@
     "evidence": "Official repository CC0-1.0 license at 440300901dfe9275fd84e0b7763af1f8443ae62e",
     "license": "CC0-1.0",
     "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-    "reviewed": true,
-    "review_scope": "Source-level license and basic PCM validation; listening review pending",
+    "reviewed": false,
+    "review_scope": "Source-level license and basic PCM validation; listening review pending; pitch estimate inconclusive or inconsistent with instrument group; excluded pending verification",
     "instrument": "clarinet",
     "kind": "note",
     "pitch": 78,
@@ -1157,6 +1609,13 @@
     "sample_rate": 44100,
     "channels": 2,
     "bit_depth": 16,
-    "verified_date": "2026-11-25"
+    "verified_date": "2026-11-25",
+    "original_pitch": 78,
+    "pitch_audit": {
+      "measured_midi": null,
+      "octave_shift": null,
+      "run": 45721087096
+    },
+    "pitch_verified": false
   }
 ]
