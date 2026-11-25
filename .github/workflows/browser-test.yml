@@ -1,0 +1,14 @@
+name: Browser music smoke test
+on:
+  push:
+    paths: ['src/**','create.html','catalog/**','audio/**','.github/workflows/browser-test.yml','tests/browser-smoke.cjs']
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/browser-smoke.cjs
