@@ -3,7 +3,7 @@ Run with Python 3 and network access. Downloads real source WAVs, never synthesi
 """
 import pathlib,json,urllib.request,urllib.parse,re,hashlib,wave,datetime,io
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-SOURCES=[('sgossner/VCSL','Chordophones/Zithers/Grand Piano, Kawai/Sustains/','acoustic grand piano','GPiano_sus_'),('sgossner/VSCO-2-CE','Woodwinds/Flute/susvib/','concert flute','LDFlute_susvib_')]
+SOURCES=[('sgossner/VCSL','Chordophones/Zithers/Grand Piano, Kawai/Sustains/','acoustic grand piano','GPiano_sus_'),('sgossner/VSCO-2-CE','Woodwinds/Flute/susvib/','concert flute','LDFlute_susvib_'),('sgossner/VSCO-2-CE','Strings/Harp/','harp','KSHarp_'),('sgossner/VSCO-2-CE','Strings/Cello Section/susvib/','cello section','susvib_'),('sgossner/VSCO-2-CE','Woodwinds/Clarinet/susLong/','clarinet','DCClar_susLong_')]
 def get(url):
  req=urllib.request.Request(url,headers={'User-Agent':'AuralunaMusicStudio/1.0'})
  with urllib.request.urlopen(req,timeout=60) as r:
@@ -28,7 +28,7 @@ def run():
    path=item['path'];name=path.rsplit('/',1)[-1]
    if not path.startswith(folder) or not name.lower().endswith('.wav'):continue
    midi=pitch(name,prefix)
-   if midi is None or not 45<=midi<=81:continue
+   if midi is None or not (36 if instrument=='cello section' else 42)<=midi<=81:continue
    rank=(0 if '_v2_' in name else 1,0 if 'rr1' in name else 1,name)
    if midi not in notes or rank<notes[midi][0]:notes[midi]=(rank,path)
   if len(notes)<4:raise ValueError('Insufficient sample matches: '+instrument)
