@@ -1,0 +1,37 @@
+[
+  {
+    "file": "File:Chopin Nocturne No. 2 in E Flat Major, Op. 9.ogg",
+    "title": "Chopin Nocturne No. 2 — Peter Johnston",
+    "license": "CC0-1.0",
+    "kind": "composition",
+    "instrument": "acoustic grand piano"
+  },
+  {
+    "file": "File:Zero-project - 02 - The rain song (pure piano version).ogg",
+    "title": "The rain song — pure piano version",
+    "license": "CC-BY-4.0",
+    "kind": "composition",
+    "instrument": "piano"
+  },
+  {
+    "file": "File:Zero-project - 02 - The rain song 2 (pure piano version).ogg",
+    "title": "The rain song 2 — pure piano version",
+    "license": "CC-BY-4.0",
+    "kind": "composition",
+    "instrument": "piano"
+  },
+  {
+    "file": "File:James River Rapids 3.ogg",
+    "title": "James River Rapids",
+    "license": "CC0-1.0",
+    "kind": "nature",
+    "instrument": "river"
+  },
+  {
+    "file": "File:Swale.ogg",
+    "title": "Swale field recording",
+    "license": "CC0-1.0",
+    "kind": "nature",
+    "instrument": "river"
+  }
+]
