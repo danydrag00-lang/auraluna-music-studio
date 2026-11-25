@@ -1,10 +1,10 @@
 import {render} from './render.mjs';
-// Render bounded, independently composed sections, joining with equal-power PCM crossfades.
+// Render bounded, independently composed sections, joining with linear PCM crossfades.
 // Stream to disk where supported; never allocate the entire uncompressed mix as a float buffer.
 const RATE=44100, BYTES=4, OVERLAP=2, SECTION=90;
 export function wavHeader(frames){const size=frames*BYTES;if(!Number.isSafeInteger(size)||size<0||size>0xffffffff-36)throw Error('WAV exceeds RIFF size limit');const a=new Uint8Array(44),v=new DataView(a.buffer);for(const [p,s] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']])for(let i=0;i<s.length;i++)a[p+i]=s.charCodeAt(i);v.setUint32(4,size+36,true);v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,2,true);v.setUint32(24,RATE,true);v.setUint32(28,RATE*BYTES,true);v.setUint16(32,BYTES,true);v.setUint16(34,16,true);v.setUint32(40,size,true);return a;}
 export function blend(a,b){if(a.length!==b.length||a.length%4)throw Error('Invalid overlap');const out=new Uint8Array(a.length),x=new DataView(a.buffer,a.byteOffset,a.byteLength),y=new DataView(b.buffer,b.byteOffset,b.byteLength),z=new DataView(out.buffer);for(let i=0;i<a.length;i+=4){const t=i/Math.max(4,a.length-4);for(let c=0;c<4;c+=2){const value=x.getInt16(i+c,true)*(1-t)+y.getInt16(i+c,true)*t;z.setInt16(i+c,Math.round(value),true);}}return out;}
-export function sectionPlan(seconds){if(!Number.isInteger(seconds)||seconds<180||seconds>7200)throw Error('Extended duration must be 3–120 minutes');const result=[];let start=0;while(start<seconds){const length=Math.min(SECTION,seconds-start);result.push({start,length});if(start+length===seconds)break;start+=length-OVERLAP;}return result;}
+export function sectionPlan(seconds){if(!Number.isInteger(seconds)||seconds<180||seconds>7200)throw Error('Extended duration must be 3–120 minutes');const result=[];let start=0;const count=Math.ceil((seconds-OVERLAP)/(SECTION-OVERLAP));const total=seconds+OVERLAP*(count-1);const base=Math.floor(total/count),extra=total%count;for(let i=0;i<count;i++){const length=base+(i<extra?1:0);result.push({start,length});start+=length-OVERLAP;}return result;}
 export async function renderLong(project,{seconds,compose,catalog,writer,onProgress=()=>{},signal}){
  const plan=sectionPlan(seconds),parts=[],used=new Map();let pending=null,written=0;
  const emit=async bytes=>{if(writer)await writer.write(bytes);else parts.push(bytes);};
