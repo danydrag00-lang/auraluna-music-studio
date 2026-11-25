@@ -1,0 +1,1 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {loopPlan} from '../src/soundscape.mjs';test('crossfaded loops remain bounded',()=>{const p=loopPlan(17,60);assert.equal(p[0].start,0);assert.equal(p.at(-1).end,60);for(const x of p)assert.ok(x.end>x.start&&2*x.fade<=x.end-x.start);assert.throws(()=>loopPlan(1,60));});
