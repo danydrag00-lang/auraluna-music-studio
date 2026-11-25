@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {sectionPlan,wavHeader,blend} from '../src/long-render.mjs';
+test('sections cover exact requested duration',()=>{for(const n of [180,300,600,1800,3600,7200]){const p=sectionPlan(n);assert.equal(p.at(-1).start+p.at(-1).length,n);assert.equal(p.reduce((a,b)=>a+b.length,0)-2*(p.length-1),n);assert.ok(p.every(x=>x.length<=90));}});
+test('WAV header sizes',()=>{const a=wavHeader(44100*3600),v=new DataView(a.buffer);assert.equal(v.getUint32(40,true),44100*3600*4);assert.equal(v.getUint32(24,true),44100);});
+test('crossfade preserves endpoints',()=>{const a=new Uint8Array(12),b=new Uint8Array(12);for(let i=0;i<12;i+=2){new DataView(a.buffer).setInt16(i,1000,true);new DataView(b.buffer).setInt16(i,-1000,true);}const x=new DataView(blend(a,b).buffer);assert.equal(x.getInt16(0,true),1000);assert.equal(x.getInt16(4,true),0);assert.equal(x.getInt16(8,true),-1000);});
