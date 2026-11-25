@@ -7,3 +7,5 @@
 .comparison-table{width:100%;border-collapse:collapse;font-size:14px}.comparison-table th,.comparison-table td{padding:12px 8px;border-bottom:1px solid #343c46;text-align:left;overflow-wrap:anywhere}.comparison-table th{color:#d8be8a}#comparison{overflow-x:auto;margin-bottom:20px}#checks label{padding:8px 0}input[type=file]{display:block;max-width:100%;margin:8px 0}aside{overflow-y:auto}
 
 .mix-track{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #343c46}.mix-track label{font-size:13px}@media(max-width:600px){.mix-track{grid-template-columns:1fr}.mix-track input{max-width:100%}}
+
+.mix-track{grid-template-columns:minmax(120px,1fr) repeat(3,minmax(90px,1fr)) auto auto}.mix-track output{display:block;color:#d8be8a;font-variant-numeric:tabular-nums}.mix-track input[type=checkbox]{accent-color:#75b9a9}@media(max-width:850px){.mix-track{grid-template-columns:repeat(2,minmax(0,1fr))}.mix-track strong{grid-column:1/-1}}#remix-result[hidden]{display:none}
