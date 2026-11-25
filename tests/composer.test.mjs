@@ -4,3 +4,5 @@ test('bounded note events',()=>{for(const mood of ['sleep','spa','zen','indian',
 test('reject missing instruments and invalid durations',()=>{assert.throws(()=>compose({seed:1,instruments:[]}));assert.throws(()=>compose({seed:1,seconds:3600}));});
 
 test('flute phrases do not overlap',()=>{const p=compose({seed:7,seconds:30,instruments:['concert flute'],complexity:100});for(let i=1;i<p.events.length;i++)assert.ok(p.events[i-1].time+p.events[i-1].duration<=p.events[i].time);});
+
+test('extended composition preserves opening events',()=>{const p=compose({seed:123,seconds:30,instruments:['piano','concert flute']});const q=compose({...p,seconds:300});assert.ok(q.events.length>p.events.length);assert.deepEqual(q.events.filter(e=>e.time+e.duration<29),p.events.filter(e=>e.time+e.duration<29));assert.equal(q.seconds,300);});
