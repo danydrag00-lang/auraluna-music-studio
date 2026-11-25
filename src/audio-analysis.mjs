@@ -1,3 +1,4 @@
+import {musicalProfile} from './music-analysis.mjs';
 // Descriptive audio measurements, not a relaxation score or a LUFS implementation.
 const db=x=>20*Math.log10(Math.max(x,1e-8));
 export function analyze(buffer){
@@ -12,7 +13,7 @@ export function analyze(buffer){
  const active=levels.filter(x=>x>-50).sort((a,b)=>a-b),pct=(p)=>active[Math.floor((active.length-1)*p)]??-160;
  return {seconds:length/rate,fullDuration:buffer.length/rate,peakDb:db(peak),rmsDb:db(Math.sqrt(sum/n)),variationDb:Math.max(0,pct(.9)-pct(.1)),quietPercent:100*quiet/levels.length,clipPercent:100*clip/n,brightness:totalEnergy>1e-12?100*lowEnergy/totalEnergy:0};
 }
-export async function analyzeFile(file){if(file.size>80*1024*1024)throw Error('Use a reference excerpt under 80 MB.');const ctx=new AudioContext();try{return analyze(await ctx.decodeAudioData(await file.arrayBuffer()));}finally{await ctx.close();}}
+export async function analyzeFile(file){if(file.size>80*1024*1024)throw Error('Use a reference excerpt under 80 MB.');const ctx=new AudioContext();try{const b=await ctx.decodeAudioData(await file.arrayBuffer());return {...analyze(b),...musicalProfile(b)};}finally{await ctx.close();}}
 export function brief(m){return {complexity:m.quietPercent>20?15:m.variationDb>12?25:35,mood:'sleep',note:'A starting point only; listen before approving. Brightness and loudness do not identify tempo or genre.'};}
 
 // Similarity diagnostics use level-independent features; do not rank musical beauty.
