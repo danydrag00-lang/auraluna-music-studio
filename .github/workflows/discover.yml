@@ -1,0 +1,29 @@
+name: Discover audio candidates
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+permissions:
+  contents: write
+concurrency:
+  group: audio-discovery
+  cancel-in-progress: false
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test composer
+        run: node --test tests/composer.test.mjs
+      - name: Discover candidates
+        run: python3 scripts/discover_commons.py
+      - name: Save candidate queue
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalog/candidates.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update unreviewed audio candidate queue"
+            git push origin HEAD:main
+          fi
