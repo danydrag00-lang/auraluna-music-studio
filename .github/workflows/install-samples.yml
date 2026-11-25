@@ -21,6 +21,8 @@ jobs:
           ref: main
       - run: node --test tests/composer.test.mjs
       - run: python3 scripts/install_versilian.py
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Commit actual samples and catalogue
         run: |
           git config user.name "github-actions[bot]"
