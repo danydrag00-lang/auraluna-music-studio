@@ -1,0 +1,1 @@
+export function normalizeMix(m={},instruments=[]){const clamp=(x,a,b,d)=>Number.isFinite(x)?Math.max(a,Math.min(b,x)):d;const tracks=Object.fromEntries(instruments.map(n=>[n,{gain:clamp(m?.tracks?.[n]?.gain,0,1.5,1),pan:clamp(m?.tracks?.[n]?.pan,-1,1,0)}]));return {tone:clamp(m?.tone,1200,10000,4200),space:clamp(m?.space,0,2,1),tracks};}
