@@ -20,7 +20,7 @@ a=P.parse_args()
 root=Path(a.root)
 assert 15<=a.seconds<=300
 names=a.instruments.split(",")
-assert names and len(set(names))==len(names) and set(names)<=set(["felt_piano","grand_piano","flute","cello","harp"])
+assert names and len(set(names))==len(names) and set(names)<=set(["felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls"])
 src=Path(a.midi) if a.midi else max((root/"productions").rglob("arrangement.mid"),key=lambda p:p.stat().st_mtime)
 out=src.parent/"ensemble"
 out.mkdir(exist_ok=True)
@@ -35,6 +35,23 @@ parts={n:[] for n in names}
 for name in ("felt_piano","grand_piano"):
     if name in parts: parts[name]=[note(n.pitch,n.start,n.end,n.velocity) for n in notes]
 last=69
+if "handpan" in parts:
+    import fluidsynth
+    synth=fluidsynth.Synth(gain=.8,samplerate=SR)
+    sfid=synth.sfload(str(next((root/"instruments/handpan").rglob("*.sf2"))))
+    synth.program_select(0,sfid,0,0)
+    playable=[]
+    for pitch in range(36,89):
+        synth.all_sounds_off(0); synth.noteon(0,pitch,65)
+        x=np.asarray(synth.get_samples(12000),dtype=np.float32)
+        if np.sqrt(np.mean(x*x))>15:playable.append(pitch)
+    synth.delete()
+    if not playable:raise RuntimeError("No playable handpan keys")
+    for t in np.arange(.5,a.seconds-1,3.5):
+        active=[n for n in notes if n.start<t+1 and n.end>t]
+        compatible=[p for p in playable if any(p%12==n.pitch%12 for n in active)]
+        pitch=int(rng.choice(compatible or playable))
+        parts["handpan"].append(note(pitch,t,t+2.5,43))
 for t in np.arange(0,a.seconds-1,4):
     active=[n for n in notes if n.start<t+1.2 and n.end>t]
     if not active: continue
@@ -121,9 +138,29 @@ def balance(x,db,cap=8):
     if not np.isfinite(rms) or rms<1e-8:raise RuntimeError("Silent or invalid track")
     return x*min(cap,10**(db/20)/rms)
 mix=np.zeros((frames,2),np.float32)
-levels={"felt_piano":-30,"grand_piano":-30,"flute":-36,"cello":-38,"harp":-37}
+levels={"felt_piano":-30,"grand_piano":-30,"flute":-36,"cello":-38,"harp":-37,"handpan":-31,"bansuri":-31,"singing_bowls":-39}
 report={}
 for name,ns in parts.items():
+    if name in ("bansuri","singing_bowls"):
+        path=next((root/"instruments"/name).rglob("*.wav"))
+        recording=stereo(load(str(path)))
+        x=np.zeros((frames,2),np.float32)
+        if name=="bansuri":
+            # Recorded phrase, not a chromatic instrument. Keep original pitch.
+            offset=int(rng.integers(0,max(1,len(recording)-frames+1)))
+            segment=recording[offset:offset+frames]
+            x[:len(segment)]=segment
+            report[name]=1
+        else:
+            starts=list(range(0,frames,SR*17))
+            for start in starts:
+                segment=recording[:min(len(recording),frames-start)].copy()
+                fade=min(SR,len(segment)//2)
+                if fade:segment[-fade:]*=np.linspace(1,0,fade)[:,None]
+                x[start:start+len(segment)]+=segment
+            report[name]=len(starts)
+        mix+=balance(x,levels[name])
+        continue
     if not ns:continue
     x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
     x=balance(x,levels[name])
@@ -160,12 +197,12 @@ subprocess.run(["ffmpeg","-y","-loglevel","error","-i",str(out/"ensemble.flac"),
 arr=pm.PrettyMIDI()
 for name,ns in parts.items():
     if not ns:continue
-    i=pm.Instrument({"felt_piano":0,"grand_piano":0,"harp":46,"cello":42,"flute":73}[name],name=name);i.notes=ns;arr.instruments.append(i)
+    i=pm.Instrument({"felt_piano":0,"grand_piano":0,"harp":46,"cello":42,"flute":73,"handpan":114}[name],name=name);i.notes=ns;arr.instruments.append(i)
 arr.write(str(out/"ensemble.mid"))
 licences=[]
 for p in (root/"licenses").glob("*.json"):
     d=json.loads(p.read_text())
-    if p.stem in report or (a.nature!="none" and d.get("category")=="nature/"+a.nature):licences.append(d)
+    if p.stem in report or d.get("category","").removeprefix("instruments/") in report or (a.nature!="none" and d.get("category")=="nature/"+a.nature):licences.append(d)
 (out/"licences.json").write_text(json.dumps(licences,indent=2))
 (out/"report.json").write_text(json.dumps({"source":str(src),"seconds":a.seconds,"notes":report,"nature":a.nature,"rms_dbfs":20*np.log10(max(1e-12,float(np.sqrt(np.mean(mix*mix))))),"peak_dbfs":20*np.log10(max(1e-12,float(np.max(np.abs(mix))))),"tuning":"VSCO sustained samples assumed +12 semitones from prior audit; verify current library","licence_note":"Source records only; review attribution and model output rights."},indent=2))
 print("ENSEMBLE READY:",out/"ensemble.mp3")
