@@ -1772,5 +1772,98 @@
       "clipped_fraction": 0.0
     },
     "verified_date": "2026-11-25"
+  },
+  {
+    "id": "6e70773ee454a96f29cb4b762e3ccdaa46607bead812a153dc932bef0f986d08",
+    "title": "Broken Hands \u2014 bowed guitar improvisation",
+    "creator": "Thomasbrunkard",
+    "source": "https://commons.wikimedia.org/wiki/File:Broken_Hands_Improvisation.ogg",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0",
+    "evidence": {
+      "source_sha1": "15726018bfa19810ac8b4ee12cac690d17a345ad",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Broken_Hands_Improvisation.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC BY 4.0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "composition",
+    "instrument": "guitarviol",
+    "path": "audio/6e70773ee454a96f29cb4b762e3ccdaa46607bead812a153dc932bef0f986d08.wav",
+    "duration": 163.42204081632653,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.546417236328125,
+      "rms": 0.05289427382617179,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-26"
+  },
+  {
+    "id": "117dd0d4a042d4a63b60d66e1ad1f09d6069158084c2a6b1bf1268a3d3a30cbf",
+    "title": "Garden birds",
+    "creator": "Akum20",
+    "source": "https://commons.wikimedia.org/wiki/File:Birds_chirping_in_a_garden.ogg",
+    "license": "CC0-1.0",
+    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "evidence": {
+      "source_sha1": "53e7cac9a45f2d680f5ead2e4a42892c21a69ac0",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Birds_chirping_in_a_garden.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "nature",
+    "instrument": "birds",
+    "path": "audio/117dd0d4a042d4a63b60d66e1ad1f09d6069158084c2a6b1bf1268a3d3a30cbf.wav",
+    "duration": 208.65451247165532,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.350433349609375,
+      "rms": 0.009602922423092382,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-26"
+  },
+  {
+    "id": "f7978610e9fe1d07a868a158a4a7e8f34727bf776f7156f522178d218929eb23",
+    "title": "Amazon forest toucans",
+    "creator": "Felix Blume",
+    "source": "https://commons.wikimedia.org/wiki/File:404114_felix-blume_toucans-singing-in-the-amazonian-rainforest-brazil.ogg",
+    "license": "CC0-1.0",
+    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "evidence": {
+      "source_sha1": "154e9b69249520293243d08badfe422c46834801",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/8/87/404114_felix-blume_toucans-singing-in-the-amazonian-rainforest-brazil.ogg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license_label": "CC0",
+      "conversion": "PCM stereo 44.1 kHz, max 300 seconds"
+    },
+    "kind": "nature",
+    "instrument": "forest",
+    "path": "audio/f7978610e9fe1d07a868a158a4a7e8f34727bf776f7156f522178d218929eb23.wav",
+    "duration": 300.0,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bit_depth": 16,
+    "reviewed": false,
+    "rights_verified": true,
+    "technical_verified": true,
+    "review_scope": "File-level license and checksum verified; PCM peak/RMS/clipping screened; listening approval pending",
+    "quality": {
+      "peak": 0.95556640625,
+      "rms": 0.08627575774301585,
+      "clipped_fraction": 0.0
+    },
+    "verified_date": "2026-11-26"
   }
 ]
