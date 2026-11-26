@@ -16,7 +16,11 @@ P.add_argument("--instruments",default="felt_piano,flute,cello,harp")
 P.add_argument("--nature",choices=["none","rain","river","ocean","forest"],default="river")
 P.add_argument("--mood",choices=["luxury_spa","deep_sleep","meditation"],default="luxury_spa")
 P.add_argument("--seconds",type=int,default=30)
+P.add_argument("--section",action="store_true")
+P.add_argument("--gains",default="{}")
 a=P.parse_args()
+gains=json.loads(a.gains)
+if not isinstance(gains,dict) or any(not isinstance(v,(int,float)) or not math.isfinite(v) or not -60<=v<=12 for v in gains.values()):raise ValueError("Gains must be dB offsets between -60 and +12")
 root=Path(a.root)
 assert 15<=a.seconds<=300
 names=a.instruments.split(",")
@@ -159,11 +163,11 @@ for name,ns in parts.items():
                 if fade:segment[-fade:]*=np.linspace(1,0,fade)[:,None]
                 x[start:start+len(segment)]+=segment
             report[name]=len(starts)
-        mix+=balance(x,levels[name])
+        mix+=balance(x,levels[name])*10**(gains.get(name,0)/20)
         continue
     if not ns:continue
     x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
-    x=balance(x,levels[name])
+    x=balance(x,levels[name])*10**(gains.get(name,0)/20)
     pan={"flute":.18,"cello":-.18,"harp":.12}.get(name,0)
     x[:,0]*=1-pan;x[:,1]*=1+pan
     mix+=x
@@ -184,16 +188,18 @@ if a.nature!="none":
     w=np.linspace(0,1,n)[:,None]
     loop=np.concatenate([x[-n:]*(1-w)+x[:n]*w,x[n:-n]])
     mix+=balance(loop[np.arange(frames)%len(loop)],-39)
-fade=min(SR*4,frames//4)
-mix[:fade]*=np.linspace(0,1,fade)[:,None]
-mix[-fade:]*=np.linspace(1,0,fade)[:,None]
+if not a.section:
+    fade=min(SR*4,frames//4)
+    mix[:fade]*=np.linspace(0,1,fade)[:,None]
+    mix[-fade:]*=np.linspace(1,0,fade)[:,None]
 ceiling=10**(-8/20)
 threshold=.7*ceiling
 absx=np.abs(mix)
 mix=np.sign(mix)*np.where(absx>threshold,threshold+(ceiling-threshold)*np.tanh((absx-threshold)/(ceiling-threshold)),absx)
 assert np.isfinite(mix).all()
 sf.write(out/"ensemble.flac",mix,SR,subtype="PCM_24")
-subprocess.run(["ffmpeg","-y","-loglevel","error","-i",str(out/"ensemble.flac"),"-b:a","320k",str(out/"ensemble.mp3")],check=True)
+if not a.section:
+    subprocess.run(["ffmpeg","-y","-loglevel","error","-i",str(out/"ensemble.flac"),"-b:a","320k",str(out/"ensemble.mp3")],check=True)
 arr=pm.PrettyMIDI()
 for name,ns in parts.items():
     if not ns:continue
