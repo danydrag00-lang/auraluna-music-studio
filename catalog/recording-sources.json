@@ -33,5 +33,26 @@
     "license": "CC0-1.0",
     "kind": "nature",
     "instrument": "river"
+  },
+  {
+    "file": "File:Broken Hands Improvisation.ogg",
+    "title": "Broken Hands — bowed guitar improvisation",
+    "license": "CC-BY-4.0",
+    "kind": "composition",
+    "instrument": "guitarviol"
+  },
+  {
+    "file": "File:Birds chirping in a garden.ogg",
+    "title": "Garden birds",
+    "license": "CC0-1.0",
+    "kind": "nature",
+    "instrument": "birds"
+  },
+  {
+    "file": "File:404114 felix-blume toucans-singing-in-the-amazonian-rainforest-brazil.ogg",
+    "title": "Amazon forest toucans",
+    "license": "CC0-1.0",
+    "kind": "nature",
+    "instrument": "forest"
   }
 ]
