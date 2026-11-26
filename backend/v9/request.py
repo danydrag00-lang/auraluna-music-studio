@@ -43,8 +43,9 @@ def normalize(r):
     if nature not in NATURE or not instruments and nature=="none":raise ValueError("Select a valid sound source")
     seconds=r.get("seconds")
     if seconds is None:
-        m=re.search(r"(\d+(?:\.\d+)?)\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b",t)
-        seconds=round(float(m[1])*(3600 if m[2].startswith("h") else 60 if m[2].startswith("m") else 1)) if m else 120
+        m=re.search(r"(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b",t)
+        words={"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10,"twelve":12}
+        seconds=round((words[m[1]] if m[1] in words else float(m[1]))*(3600 if m[2].startswith("h") else 60 if m[2].startswith("m") else 1)) if m else 120
     def integer(k,v,lo,hi):
         if type(v)!=int or not lo<=v<=hi:raise ValueError(f"{k} must be an integer {lo}–{hi}")
         return v
