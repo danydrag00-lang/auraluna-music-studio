@@ -11,6 +11,8 @@ SR=48000
 ROOT=Path(os.environ.get("AURALUNA_ROOT","/kaggle/working/Auraluna-V9"))
 HERE=Path(__file__).resolve().parent
 PRESETS={
+ "yoga_zen":("meditation","handpan,singing_bowls","forest"),
+ "indian_meditation":("meditation","bansuri,singing_bowls","river"),
  "luxury_spa":("luxury_spa","felt_piano,flute,cello,harp","river"),
  "deep_sleep":("deep_sleep","felt_piano,cello","rain"),
  "meditation":("meditation","flute,harp","ocean"),
@@ -150,7 +152,7 @@ for v in range(1,a.variations+1):
     records=[]
     for f in (ROOT/"licenses").glob("*.json"):
         d=json.loads(f.read_text())
-        if (instruments and f.stem in instruments.split(",")) or d.get("category")=="nature/"+nature:records.append(d)
+        if (instruments and f.stem in instruments.split(",")) or (instruments and d.get("category","").removeprefix("instruments/") in instruments.split(",")) or d.get("category")=="nature/"+nature:records.append(d)
     (folder/"licences.json").write_text(json.dumps(records,indent=2))
     done.write_text(json.dumps({"seconds":a.seconds,"sample_rate":SR,"file":final.name,"licence_note":"Review source attribution and model output rights; no legal clearance guarantee."},indent=2))
     print("COMPLETE:",final,flush=True)
