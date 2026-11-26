@@ -1,2 +1,5 @@
 export function normalizeMix(m={},instruments=[]){const clamp=(x,a,b,d)=>Number.isFinite(x)?Math.max(a,Math.min(b,x)):d;const tracks=Object.fromEntries(instruments.map(n=>[n,{gain:clamp(m?.tracks?.[n]?.gain,0,1.5,1),pan:clamp(m?.tracks?.[n]?.pan,-1,1,0),mute:m?.tracks?.[n]?.mute===true,solo:m?.tracks?.[n]?.solo===true,eq:clamp(m?.tracks?.[n]?.eq,-9,6,0)}]));return {tone:clamp(m?.tone,1200,10000,4200),space:clamp(m?.space,0,2,1),master:clamp(m?.master,0,1,0.75),tracks};}
 export function audibleTrack(mix,name){const tracks=mix?.tracks||{},t=tracks[name];return !t?.mute&&(!Object.values(tracks).some(x=>x.solo&&!x.mute)||t?.solo===true)&&(t?.gain??1)>0;}
+
+// Role-aware defaults; manual overrides remain available.
+export function autoMix(instruments,mood='spa'){const wind=n=>/flute|clarinet|bansuri|ney/i.test(n),bow=n=>/cello|strings/i.test(n);const lead=instruments.find(wind)||instruments.find(n=>!bow(n))||instruments[0];return normalizeMix({tone:mood==='sleep'?4800:6500,space:.35,master:.85,tracks:Object.fromEntries(instruments.map((n,i)=>[n,{gain:n===lead?1.15:bow(n)?.65:.78,pan:n===lead?.08:bow(n)?-.13:i%2?.16:-.16,eq:wind(n)?-2:0}]))},instruments)}
