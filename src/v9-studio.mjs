@@ -74,7 +74,8 @@ const API="https://auraluna-api.dhanushmanoharan1996.workers.dev";
 let key="",busy=false,timer=null,active="",attempt=0;
 const historyKey="auraluna-v9-jobs";
 function history(){try{return JSON.parse(localStorage.getItem(historyKey)||"[]").filter(x=>/^auraluna-[a-f0-9]{32}$/.test(x.slug))}catch{return []}}
-let pendingMeta=null;
+let pendingMeta=null, pendingSlug="", submitting=false;
+function lock(){busy=true;$("generate").disabled=true;$("generate").textContent=submitting?"Submitting production…":"Production in progress"}
 document.addEventListener("visibilitychange",()=>{if(document.hidden)continuousObservation=false});
 let selectedEnd=0,clockRunning=false,selectedEstimate=null,continuousObservation=false,submittingSlugExpected=false;
 function durationLabel(seconds){if(!Number.isFinite(seconds)||seconds<=0)return "Not recorded";const n=Math.round(seconds);return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
@@ -95,7 +96,7 @@ function showRequest(meta){
  $("estimate-caption").textContent=retrospective?"Planning estimate (inferred; not original)":"Original estimate";
  $("requested-estimate").textContent=selectedEstimate?estimateLabel(selectedEstimate):"Not recorded";$("requested-duration").textContent=durationLabel(meta?.seconds);$("requested-style").textContent=meta?.title||"Saved production";$("requested-format").textContent=meta?.format?.toUpperCase()||"—";$("requested-composition").textContent=meta?.composition==="thematic"?"Recurring theme":meta?.composition==="independent"?"Independent sections":"Not recorded / not applicable";$("requested-compute").textContent=meta?.compute?meta.compute+" requested":"Not recorded";}
 let monitorVersion=0, pollInFlight=false, selectedStarted=0, lastChecked=0, unknownChecks=0;
-const terminalStates=new Set(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED","CANCEL_REQUESTED"]);
+const terminalStates=new Set(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED"]);
 function updateSaved(slug,patch){try{const rows=history();localStorage.setItem(historyKey,JSON.stringify(rows.map(x=>x.slug===slug?{...x,...patch}:x)))}catch{}renderHistory()}
 function showProgress(text,running=false){$("production-status").textContent=text;$("production-panel").hidden=false;$("production-progress").hidden=!running;$("check-status").disabled=pollInFlight||!active||!key;}
 function elapsed(){if(!selectedStarted||(!clockRunning&&!selectedEnd))return "—";const n=Math.max(0,Math.floor(((selectedEnd||Date.now())-selectedStarted)/1000));return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
@@ -112,7 +113,7 @@ function renderHistory(){
   name.textContent=title||"Saved track";
   const labels={COMPLETE:"Ready",COMPLETED:"Ready",SUCCESS:"Ready",RUNNING:"Creating",QUEUED:"Queued",ERROR:"Failed",FAILED:"Failed",CANCELED:"Canceled",CANCELLED:"Canceled"};
   meta.textContent=[date?new Date(date).toLocaleString():"",seconds?"Requested: "+durationLabel(seconds):"Requested duration not recorded",format?.toUpperCase(),compute?compute+" requested":"",labels[state]||"Check status"].filter(Boolean).join(" · ");
-  info.append(name,meta);button.type="button";button.className="v9-secondary";button.textContent=["COMPLETE","COMPLETED","SUCCESS"].includes(state)?"Listen & download":"Open";button.onclick=()=>watch(slug);item.append(info,button);el.append(item);
+  info.append(name,meta);button.type="button";button.className="v9-secondary";button.textContent=["COMPLETE","COMPLETED","SUCCESS"].includes(state)?"Listen & download":"Open";button.disabled=submitting||Boolean(pendingSlug&&pendingSlug!==slug);button.onclick=()=>watch(slug);item.append(info,button);el.append(item);
  }
 }
 async function api(path,options={}){
@@ -121,7 +122,8 @@ async function api(path,options={}){
  const d=await r.json();if(!r.ok){const e=new Error(d.error||"Backend HTTP "+r.status);e.status=r.status;throw e;}return d;
 }
 function status(s){$("cloud-status").textContent=s}
-function unlock(){busy=false;$("generate").disabled=!key;$("generate").textContent="Generate Music"}
+function unlock(){if(submitting||pendingSlug){lock();return}busy=false;$("generate").disabled=!key;$("generate").textContent="Generate Music"}
+function release(slug){if(pendingSlug===slug)pendingSlug="";unlock()}
 const keyStorage="auraluna-v9-device-access";
 function forgetKey(){try{localStorage.removeItem(keyStorage)}catch{}}
 let connectionVersion=0;
@@ -139,12 +141,12 @@ async function connect(value,remember){
   let backendVersion="";try{const health=await fetch(API+"/health",{cache:"no-store"});if(health.ok)backendVersion=(await health.json()).version||""}catch{}
   if(version!==connectionVersion)return;
   status(backendVersion==="V15-composition-styles"?"Connected · V15 composition styles":backendVersion==="V14-cpu-routing"?"Connected · V14 · update Worker for composition styles":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
-  const latest=history()[0];if(latest)await watch(latest.slug);
+  const latest=history().find(x=>x.state&&!terminalStates.has(x.state))||history()[0];if(latest){if(latest.state&&!terminalStates.has(latest.state)){pendingSlug=latest.slug;lock()}await watch(latest.slug)}
  }catch(e){if(version!==connectionVersion)return;key="";if(e.status===401||e.status===403)forgetKey();$("credentials").hidden=false;status(e.message)}
  finally{if(version===connectionVersion)$("connect").disabled=false}
 }
 $("connect").onclick=()=>connect($("access-key").value.trim(),$("remember-device").checked);
-$("disconnect").onclick=()=>{++connectionVersion;forgetKey();key="";clearTimeout(timer);++monitorVersion;active="";clockRunning=false;$("production-panel").hidden=true;$("credentials").hidden=false;$("connect").disabled=false;$("generate").disabled=true;$("generate").textContent="Generate Music";status("Disconnected");busy=false;$("players").replaceChildren()};
+$("disconnect").onclick=()=>{if(submitting){showProgress("Submission is still being confirmed. Disconnect after the request returns.",true);return}++connectionVersion;forgetKey();key="";clearTimeout(timer);++monitorVersion;active="";clockRunning=false;$("production-panel").hidden=true;$("credentials").hidden=false;$("connect").disabled=false;$("generate").disabled=true;$("generate").textContent="Generate Music";status("Disconnected");pendingSlug="";busy=false;$("players").replaceChildren()};
 async function addFile(slug,name){
  const row=document.createElement("article");row.className="v9-result";
  const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("button"),message=document.createElement("p"),retry=document.createElement("button");
@@ -228,10 +230,12 @@ function addReports(slug,files){
  for(const {name} of files.filter(f=>f.name.endsWith(".json"))){const b=document.createElement("button");b.type="button";b.className="v9-secondary";b.textContent=(name.includes("licences")?"Licence information":"Raw production report")+" · Variation "+(name.match(/variation_(\d+)/)?.[1]||"1");b.onclick=async()=>{try{const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));const a=document.createElement("a");a.href=d.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open report";b.after(a)}catch(e){status(e.message)}};details.append(b)}$("players").append(details);
 }
 async function watch(slug){
+ if(submitting||pendingSlug&&pendingSlug!==slug){showProgress("A production is in progress. Check its status before opening another track.",true);return}
  continuousObservation=Boolean(submittingSlugExpected);submittingSlugExpected=false;
  if(!key){status("Connect first.");return}
  clearTimeout(timer);const version=++monitorVersion;active=slug;remember(slug);pendingMeta=null;
  const saved=history().find(x=>x.slug===slug);
+ if(!saved?.state||!terminalStates.has(saved.state)){pendingSlug=slug;lock();renderHistory()}
  showRequest(saved);clockRunning=false;selectedEnd=saved?.observedEnd||0;selectedStarted=saved?.date?Date.parse(saved.date):0;lastChecked=0;attempt=0;unknownChecks=0;pollInFlight=false;
  $("players").replaceChildren();updateClock();
  showProgress("Checking production…",true);await poll(slug,version);
@@ -248,8 +252,10 @@ async function poll(slug,version=monitorVersion){
   const done=["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED"].includes(state);
   clockRunning=!done&&!selectedEnd&&["RUNNING","QUEUED","SUBMITTED","PENDING"].includes(state);
   if(done)selectedEnd=selectedEnd||lastChecked;
-  updateSaved(slug,{state,observedEnd:selectedEnd});
-  updateClock();attempt=0;
+  const success=["COMPLETE","COMPLETED","SUCCESS"].includes(state);
+  if(!done||success){pendingSlug=slug;lock()}
+  updateSaved(slug,{state:success?"VERIFYING":state,observedEnd:selectedEnd});
+  updateClock();
   const uncertain=["UNKNOWN","UNSPECIFIED","UNDEFINED","NULL","0","STATUS_UNSPECIFIED"].includes(state);
   if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)||uncertain||state==="RUNNING"){
    if(state!=="RUNNING")showProgress(uncertain?"Checking for saved audio…":"Production complete. Preparing audio…",true);
@@ -257,6 +263,7 @@ async function poll(slug,version=monitorVersion){
    try{out=await api("/outputs?slug="+encodeURIComponent(slug))}catch(e){if(state==="RUNNING"){showProgress("Creating your music… Waiting for validated outputs.",true);next=15000;return}throw e}
    if(version!==monitorVersion)return;
    const files=out.files||[],names=new Set(files.map(f=>f.name)),audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name)&&names.has(f.name.replace(/music\.(mp3|wav|flac)$/i,"completed.json"))&&names.has(f.name.replace(/music\.(mp3|wav|flac)$/i,"licences.json")));
+   attempt=0;
    if(state==="RUNNING"&&audio.length<(history().find(x=>x.slug===slug)?.variations||1)){showProgress("Creating your music…",true);next=15000;return}
    $("players").replaceChildren();
    const expected=history().find(x=>x.slug===slug)?.variations||1;
@@ -268,20 +275,21 @@ async function poll(slug,version=monitorVersion){
    for(const f of audio){if(version!==monitorVersion)return;await addFile(slug,f.name)}
    if(version!==monitorVersion)return;
    if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);
-   showProgress("Production completed. Your audio is below.");unlock();return
+   showProgress("Production completed. Your audio is below.");release(slug);renderHistory();return
   }
   unknownChecks=0;
   if(["ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED"].includes(state)){
    showProgress((state.includes("CANCEL")?"Production canceled.":"Production failed.")+(d.failureMessage?" "+d.failureMessage:" No further details supplied by Kaggle."));
-   unlock();return
+   release(slug);renderHistory();return
   }
+  attempt=0;
   const label=state==="RUNNING"?"Creating your music…":state==="QUEUED"?"Waiting for Kaggle compute…":state==="CANCEL_REQUESTED"?"Cancellation requested…":"Kaggle status: "+state;
   showProgress(label+(selectedStarted&&Date.now()-selectedStarted>20*60000?" This is taking longer than usual; check status or review the notebook.":""),true);
   next=15000;
  }catch(e){
   if(version!==monitorVersion)return;
   continuousObservation=false;attempt++;showProgress("Status check failed: "+e.message+(attempt<4?" · Reconnecting automatically.":" · Use Check status to retry."));
-  if(attempt<4)next=Math.min(60000,15000*attempt);else unlock();
+  if(attempt<4)next=Math.min(60000,15000*attempt);else {lock();renderHistory()}
  }finally{
   if(version===monitorVersion){
    pollInFlight=false;$("check-status").disabled=!active||!key;
@@ -292,7 +300,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submittingSlugExpected=true;await watch(d.slug)}catch(e){clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message);unlock()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
