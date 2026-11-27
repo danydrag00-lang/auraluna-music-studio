@@ -1,5 +1,5 @@
 """First end-to-end V9 smoke test: original Aria MIDI, acoustic piano, optional rain."""
-import argparse, json, os, subprocess, uuid, hashlib
+import argparse, json, os, subprocess, uuid, hashlib, time
 from pathlib import Path
 import numpy as np
 import pretty_midi
@@ -9,6 +9,7 @@ from scipy.signal import butter,sosfilt
 p=argparse.ArgumentParser()
 p.add_argument("--mood",choices=["deep_sleep","luxury_spa","meditation","peaceful_piano"],default="luxury_spa")
 p.add_argument("--seconds",type=int,default=30,choices=range(15,61))
+p.add_argument("--midi-only",action="store_true",help="Skip unused preview rendering during production")
 p.add_argument("--rain",action="store_true")
 a=p.parse_args()
 root=Path(os.environ.get("AURALUNA_ROOT","/kaggle/working/Auraluna-V9"))
@@ -25,8 +26,10 @@ for pitch,start,dur,vel in [(50,0,3.8,48),(57,.8,2.8,44),(66,1.3,1.6,58),(69,3.1
     track.notes.append(pretty_midi.Note(int(vel),pitch+offset,start*speed,(start+dur)*speed))
 seed.instruments.append(track)
 seed.write(str(out/"seed.mid"))
+started=time.monotonic()
 with (out/"aria.log").open("w") as log:
     subprocess.run(["/tmp/aria-env/bin/aria","generate","--backend","torch_cuda","--checkpoint_path",str(root/"models/model.safetensors"),"--prompt_midi_path",str(out/"seed.mid"),"--prompt_duration","15","--variations","1","--temp","0.98","--min_p","0.035","--length","2048","--save_dir",str(out)],stdout=log,stderr=subprocess.STDOUT,check=True)
+print(f"Aria generation: {time.monotonic()-started:.1f}s",flush=True)
 files=sorted(out.glob("res*.mid"))
 if not files: raise RuntimeError("Aria produced no MIDI; inspect "+str(out/"aria.log"))
 generated=pretty_midi.PrettyMIDI(str(files[0]))
@@ -43,6 +46,9 @@ if len(piano.notes)<8 or max(n.end for n in piano.notes)<a.seconds*.8:
     raise RuntimeError("Generated phrase too short; retry with a new seed")
 midi.instruments.append(piano)
 midi.write(str(out/"arrangement.mid"))
+if a.midi_only:
+    print("MIDI READY:",out/"arrangement.mid",flush=True)
+    raise SystemExit(0)
 font=next(iter(sorted((root/"instruments/grand_piano").rglob("*.sf2"))))
 with (out/"render.log").open("w") as log:
     subprocess.run(["fluidsynth","-ni","-g","0.8","-r",str(sr),"-F",str(out/"raw.wav"),str(font),str(out/"arrangement.mid")],stdout=log,stderr=subprocess.STDOUT,check=True)
