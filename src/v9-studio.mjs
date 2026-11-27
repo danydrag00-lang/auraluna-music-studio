@@ -29,13 +29,21 @@ function buildRequest(){
  if(infer){if(!prompt)throw Error('Describe your music first.');}
  else{data.preset=$('preset').value;data.instruments=Object.keys(controls).filter(k=>controls[k].check.checked);data.nature=$('nature').value;data.gains=Object.fromEntries(data.instruments.map(k=>[k,Number(controls[k].slider.value)]));if(!data.instruments.length&&data.nature==='none')throw Error('Select at least one instrument or nature sound.');}
  const natureOnly=!infer&&data.instruments.length===0&&data.nature!=='none';
- if(data.seconds>(natureOnly?3600:900))throw Error('Choose up to '+(natureOnly?60:15)+' minutes for this mode.');
+ const limit=natureOnly||data.engine==='fast'?3600:900;
+ if(data.seconds>limit)throw Error('Choose up to '+limit/60+' minutes for this mode.');
+ if(![1,2,3].includes(data.variations)||natureOnly&&data.variations!==1)throw Error('Choose a valid variation count.');
+ if(data.seconds*data.variations>limit)throw Error('Combined duration must not exceed '+limit/60+' minutes.');
+ if(data.seconds>900&&data.format!=='mp3')throw Error('Choose MP3 for tracks longer than 15 minutes.');
  if(data.format==='wav'&&data.seconds&&data.seconds*288000>=2**32-65536)throw Error('This duration exceeds the standard WAV size limit. Choose MP3 or FLAC.');
  return data;
 }
 function refresh(){
  const infer=$('mode').value==='prompt';$('mix-section').hidden=infer;$('preset').disabled=infer;$('infer-duration-row').hidden=true;$('duration').disabled=false;
- const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&$('nature').value!=='none';$('duration').max=natureOnly?60:15;$('duration-limit').textContent=natureOnly?'Nature-only: up to 60 minutes.':'Instrumental or prompt mode: up to 15 minutes. Longer tracks are experimental and Kaggle quotas apply.';
+ const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&$('nature').value!=='none';const fast=$('composition-engine').value==='fast';
+ $('duration').max=natureOnly||fast?60:15;
+ $('variations').disabled=natureOnly;
+ if(natureOnly)$('variations').value='1';
+ $('duration-limit').textContent=natureOnly?'Nature-only: up to 60 minutes.':fast?'Fast acoustic: up to 60 minutes combined across variations.':'Aria: up to 15 minutes combined across variations.';
  for(const c of Object.values(controls)){c.slider.disabled=!c.check.checked;c.value.textContent=(Number(c.slider.value)>0?'+':'')+c.slider.value+' dB'}
  try{const r=buildRequest();$('summary').textContent=(r.preset?presets[r.preset][0]:'Prompt-based configuration')+' · '+(r.seconds?r.seconds/60+' min':'duration inferred')+' · '+(r.engine==='fast'?'Fast acoustic':'Aria AI')+' · '+r.variations+' variation(s) · '+r.format.toUpperCase()+(r.instruments?' · '+r.instruments.map(k=>instruments[k]).join(', ')+' · '+r.nature:'');}
  catch(e){$('summary').textContent=e.message}
@@ -101,7 +109,7 @@ $("disconnect").onclick=()=>{++connectionVersion;forgetKey();key="";clearTimeout
 async function addFile(slug,name){
  const row=document.createElement("article");row.className="v9-result";
  const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("button"),message=document.createElement("p"),retry=document.createElement("button");
- h.textContent=history().find(x=>x.slug===slug)?.title||"Your generated music";
+ h.textContent=(history().find(x=>x.slug===slug)?.title||"Your generated music")+" · Variation "+(name.match(/variation_(\d+)/)?.[1]||"1");
  const saved=history().find(x=>x.slug===slug);
  const requested=saved?.seconds?" · Requested: "+durationLabel(saved.seconds):"";
  meta.textContent=name.split(".").pop().toUpperCase()+requested;
@@ -140,7 +148,7 @@ async function addFile(slug,name){
   finally{download.disabled=false;download.textContent="Download music"}
  };
  retry.onclick=load;player.onerror=()=>{message.textContent="Audio could not play. Try downloading it.";retry.hidden=false};
- await load();
+ if((saved?.seconds||0)<=900&&(saved?.variations||1)===1){await load()}else{message.textContent="Select Load audio or Download music.";retry.textContent="Load audio";retry.hidden=false}
 }
 function addReports(slug,files){
  const details=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Licence & production details";details.append(summary);
@@ -174,9 +182,10 @@ async function poll(slug,version=monitorVersion){
    const out=await api("/outputs?slug="+encodeURIComponent(slug));
    if(version!==monitorVersion)return;
    const files=out.files||[],audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name));
-   if(state==="RUNNING"&&!audio.length){showProgress("Creating your music…",true);next=15000;return}
+   if(state==="RUNNING"&&audio.length<(history().find(x=>x.slug===slug)?.variations||1)){showProgress("Creating your music…",true);next=15000;return}
    $("players").replaceChildren();
-   if(!audio.length){
+   const expected=history().find(x=>x.slug===slug)?.variations||1;
+   if(audio.length<expected){
     if(uncertain){unknownChecks++;showProgress("Kaggle has not confirmed the production status. No audio found."+(unknownChecks<4?" Checking again automatically.":" Open Production details to verify the job; do not submit a duplicate."),false);if(unknownChecks<4)next=30000;return}
     showProgress("Completed, but no audio is available yet.");next=20000;return
    }
@@ -208,7 +217,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";selectedStarted=Date.now();selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(selectedStarted).toISOString(),seconds:data.seconds,format:data.format,engine:data.engine,state:"QUEUED"};await watch(d.slug)}catch(e){clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message);unlock()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";selectedStarted=Date.now();selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(selectedStarted).toISOString(),seconds:data.seconds,format:data.format,engine:data.engine,variations:data.variations,state:"QUEUED"};await watch(d.slug)}catch(e){clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message);unlock()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
