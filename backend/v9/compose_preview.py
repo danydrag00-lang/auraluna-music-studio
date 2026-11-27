@@ -72,10 +72,11 @@ if a.engine=="fast":
     section=int(os.environ.get("AURALUNA_SECTION","0"))
     sections=max(1,int(os.environ.get("AURALUNA_SECTIONS","1")))
     shared=int(os.environ.get("AURALUNA_MOTIF_SEED","0")) or int(rng.integers(1,2**31))
+    thematic=os.environ.get("AURALUNA_COMPOSITION","independent")=="thematic"
     theme=np.random.default_rng(shared)
     scale=[0,2,3,5,7,8,10] if a.mood=="deep_sleep" else [0,2,4,5,7,9,11]
     progressions=[[0,5,3,0],[0,3,1,0],[0,2,3,5],[0,3,4,0],[5,3,0,2]]
-    roots=progressions[(int(theme.integers(len(progressions)))+section//2)%len(progressions)]
+    roots=progressions[(int(theme.integers(len(progressions)))+(section//2 if thematic else 0))%len(progressions)]
     beat=float(theme.uniform(1.05,1.28) if a.mood=="luxury_spa" else theme.uniform(1.35,1.75))
     motif=theme.integers(0,3,size=6)
     midi=pretty_midi.PrettyMIDI()
@@ -101,7 +102,7 @@ if a.engine=="fast":
         slots=[.65,1.8,2.95] if i%4!=3 else [.85,2.4]
         for j,slot in enumerate(slots):
             if j and rng.random()<( .36 if a.mood=="deep_sleep" else .19):continue
-            d=degrees[int(motif[(j+i)%len(motif)])] if rng.random()<.88 else int(rng.choice(degrees))
+            d=degrees[int(motif[(j+i)%len(motif)])] if rng.random()<(.88 if thematic else .65) else int(rng.choice(degrees))
             candidates=[key+scale[d]+o for o in (0,12,24) if 60<=key+scale[d]+o<=84]
             pitch=min(candidates,key=lambda n:abs(n-previous)+float(rng.uniform(0,3)))
             previous=pitch
