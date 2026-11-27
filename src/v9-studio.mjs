@@ -200,6 +200,63 @@ async function connect(value,remember){
 }
 $("connect").onclick=()=>connect($("access-key").value.trim(),$("remember-device").checked);
 $("disconnect").onclick=()=>{if(submitting){showProgress("Submission is still being confirmed. Disconnect after the request returns.",true);return}++connectionVersion;forgetKey();key="";clearTimeout(timer);++monitorVersion;active="";clockRunning=false;$("production-panel").hidden=true;$("credentials").hidden=false;$("connect").disabled=false;$("generate").disabled=true;$("generate").textContent="Generate Music";status("Disconnected");pendingSlug="";busy=false;$("players").replaceChildren()};
+// Waveforms are measured from decoded output, never fabricated.
+// Bound decoding to short preview files to avoid large PCM allocations.
+async function previewPeaks(url){
+ const AudioCtx=window.AudioContext||window.webkitAudioContext;
+ if(!AudioCtx)throw Error("Waveform decoding is unavailable in this browser");
+ const context=new AudioCtx();
+ try{
+  const response=await fetch(url);
+  if(!response.ok)throw Error("Preview could not be read");
+  const encoded=await response.arrayBuffer();
+  if(encoded.byteLength>40*1024*1024)throw Error("Preview is too large for waveform analysis");
+  const audio=await context.decodeAudioData(encoded);
+  if(audio.duration>95)throw Error("Waveform analysis is limited to short previews");
+  const bins=300,peaks=new Float32Array(bins);
+  for(let c=0;c<audio.numberOfChannels;c++){
+   const samples=audio.getChannelData(c);
+   for(let i=0;i<samples.length;i++){
+    const bin=Math.min(bins-1,Math.floor(i*bins/samples.length));
+    peaks[bin]=Math.max(peaks[bin],Math.abs(samples[i]));
+   }
+  }
+  return peaks;
+ }finally{await context.close().catch(()=>{})}
+}
+function mountPreviewWaveform(row,player){
+ const panel=document.createElement("div");panel.className="v9-waveform";
+ const canvas=document.createElement("canvas");canvas.width=900;canvas.height=108;canvas.setAttribute("aria-hidden","true");
+ const label=document.createElement("p");label.className="hint";label.textContent="Waveform: load preview to analyse actual audio.";
+ const seek=document.createElement("input");seek.type="range";seek.min="0";seek.max="1000";seek.step="1";seek.value="0";seek.disabled=true;seek.setAttribute("aria-label","Seek preview position");
+ panel.append(canvas,seek,label);player.after(panel);
+ let peaks=null;
+ function draw(){
+  const ctx=canvas.getContext("2d");if(!ctx)return;
+  const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
+  ctx.fillStyle="#22252c";ctx.fillRect(0,0,w,h);
+  if(!peaks)return;
+  const progress=Number.isFinite(player.duration)&&player.duration>0?player.currentTime/player.duration:0;
+  const step=w/peaks.length;
+  for(let i=0;i<peaks.length;i++){
+   const amp=Math.max(1,Math.min(1,peaks[i])*(h/2-4));
+   ctx.fillStyle=i/peaks.length<=progress?"#e16172":"#9ca6b3";
+   ctx.fillRect(i*step,(h-2*amp)/2,Math.max(1,step-1),amp*2);
+  }
+ }
+ function jump(value){
+  if(Number.isFinite(player.duration)&&player.duration>0)player.currentTime=Math.max(0,Math.min(1,value))*player.duration;
+ }
+ seek.addEventListener("input",()=>jump(Number(seek.value)/1000));
+ canvas.addEventListener("click",e=>{if(peaks){const rect=canvas.getBoundingClientRect();if(rect.width)jump((e.clientX-rect.left)/rect.width)}});
+ player.addEventListener("timeupdate",()=>{if(Number.isFinite(player.duration)&&player.duration>0){seek.value=String(Math.round(player.currentTime/player.duration*1000));draw()}});
+ draw();
+ return async url=>{
+  label.textContent="Analysing decoded preview…";
+  try{peaks=await previewPeaks(url);if(!row.isConnected)return;seek.disabled=false;label.textContent="Measured peak amplitude · common full-scale reference · click or use the slider to seek.";draw()}
+  catch(e){if(row.isConnected)label.textContent="Waveform unavailable: "+e.message}
+ };
+}
 async function addFile(slug,name){
  const row=document.createElement("article");row.className="v9-result";
  const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("button"),message=document.createElement("p"),retry=document.createElement("button");
@@ -214,6 +271,8 @@ async function addFile(slug,name){
  retry.type="button";retry.className="v9-secondary";retry.textContent="Retry audio";retry.hidden=true;
  row.append(h,meta,message,player,download,retry);
  if(saved?.preview&&saved.requestSettings?.engine==="fast"&&saved.requestSettings?.seed&&saved.requestSettings?.instruments?.length){const select=document.createElement("button");select.type="button";select.className="v9-secondary";select.textContent="Use this preview’s musical identity";select.onclick=()=>{if(busy||submitting||pendingSlug){message.textContent="Finish the active production first.";return}restoreSettings({...saved.requestSettings,seed_variation:Number(name.match(/variation_(\d+)/)?.[1]||1)});message.textContent="Selected variation restored. Choose a longer duration; the arrangement will evolve, not reproduce the exact preview audio.";};row.append(select);}$("players").append(row);
+ const analyse=saved?.preview&&saved.seconds<=90?mountPreviewWaveform(row,player):null;
+ let analysedURL="";
  let objectURL="",loading=null;
  const query="?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name);
  async function getAudio(){
@@ -234,7 +293,7 @@ async function addFile(slug,name){
  }
  async function load(){
   retry.hidden=true;message.textContent="Preparing your music…";
-  try{const u=await getAudio();if(!row.isConnected)return;player.src=u;player.hidden=false;message.textContent=""}
+  try{const u=await getAudio();if(!row.isConnected)return;player.src=u;player.hidden=false;message.textContent="";if(analyse&&analysedURL!==u){analysedURL=u;void analyse(u)}}
   catch(e){message.textContent=e.message;retry.hidden=false}
  }
  download.onclick=async()=>{
@@ -243,6 +302,7 @@ async function addFile(slug,name){
   catch(e){message.textContent="Download unavailable: "+e.message;retry.hidden=false}
   finally{download.disabled=false;download.textContent="Download music"}
  };
+ player.addEventListener("play",()=>{for(const other of $("players").querySelectorAll("audio"))if(other!==player)other.pause()});
  retry.onclick=load;player.onerror=()=>{message.textContent="Audio could not play. Try downloading it.";retry.hidden=false};
  if((saved?.seconds||0)<=900&&(saved?.variations||1)===1){await load()}else{message.textContent=(saved?.seconds||0)>3600?"Extended track: choose Download music for a direct link.":"Select Load audio or Download music.";retry.textContent="Load audio";retry.hidden=(saved?.seconds||0)>3600}
 }
