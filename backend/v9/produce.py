@@ -1,7 +1,7 @@
 """V9 production controller. Run beside compose_preview.py and arrange.py.
 Checkpoints are local; copy the job directory to durable storage before session loss.
 """
-import argparse, json, math, os, subprocess, sys, tempfile, uuid, hashlib
+import argparse, json, math, os, subprocess, sys, tempfile, uuid, hashlib, time
 from pathlib import Path
 import numpy as np
 import soundfile as sf
@@ -72,7 +72,11 @@ overlap=4*SR
 count=max(1,math.ceil((a.seconds-4)/56)) if mood else 0
 section_seconds=max(15,math.ceil((a.seconds+4*max(0,count-1))/max(1,count)))
 def run(cmd,log,env=None):
-    with log.open("a") as f:subprocess.run(cmd,stdout=f,stderr=subprocess.STDOUT,check=True,env=env)
+    started=time.monotonic()
+    try:
+        with log.open("a") as f:subprocess.run(cmd,stdout=f,stderr=subprocess.STDOUT,check=True,env=env)
+    finally:
+        print(f"PERF {Path(cmd[1]).name}: {time.monotonic()-started:.1f}s",flush=True)
 def valid(path,frames):
     try:
         info=sf.info(path);return info.frames==frames and info.samplerate==SR and info.channels==2
@@ -110,7 +114,7 @@ for v in range(1,a.variations+1):
             env=dict(os.environ,AURALUNA_ROOT=str(isolated))
             for attempt in range(3):
                 try:
-                    run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds)],folder/"compose.log",env)
+                    run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds),"--midi-only"],folder/"compose.log",env)
                     midi=max((isolated/"productions").rglob("arrangement.mid"),key=lambda p:p.stat().st_mtime)
                     # Hash note content, not MIDI file metadata.
                     import pretty_midi
@@ -132,6 +136,7 @@ for v in range(1,a.variations+1):
             else:raise RuntimeError("Repeated composition; retry job")
         budget-=1
         print(f"Variation {v}: section {i+1}/{count} saved",flush=True)
+    export_started=time.monotonic()
     final=folder/("music."+a.format)
     done=folder/"completed.json"
     if done.exists() and final.exists():continue
@@ -188,5 +193,6 @@ for v in range(1,a.variations+1):
     (folder/"licences.json").write_text(json.dumps(records,indent=2))
     done.write_text(json.dumps({"seconds":a.seconds,"sample_rate":SR,"file":final.name,"licence_note":"Review source attribution and model output rights; no legal clearance guarantee."},indent=2))
     for section in folder.glob("section_*.flac"):section.unlink()
+    print(f"PERF final mix and export: {time.monotonic()-export_started:.1f}s",flush=True)
     print("COMPLETE:",final,flush=True)
 print("ALL VARIATIONS COMPLETE",flush=True)
