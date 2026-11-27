@@ -1,5 +1,5 @@
 """Render an existing Aria arrangement with acoustic samples; no synthetic fallback."""
-import argparse, json, re, subprocess, tempfile, math
+import argparse, json, re, subprocess, tempfile, math, os
 from pathlib import Path
 from functools import lru_cache
 import numpy as np
@@ -28,7 +28,7 @@ assert names and len(set(names))==len(names) and set(names)<=set(["felt_piano","
 src=Path(a.midi) if a.midi else max((root/"productions").rglob("arrangement.mid"),key=lambda p:p.stat().st_mtime)
 out=src.parent/"ensemble"
 out.mkdir(exist_ok=True)
-rng=np.random.default_rng()
+rng=np.random.default_rng(int(os.environ["AURALUNA_PERFORMANCE_SEED"]) if "AURALUNA_PERFORMANCE_SEED" in os.environ else None)
 original=pm.PrettyMIDI(str(src))
 notes=sorted([n for i in original.instruments if not i.is_drum for n in i.notes if n.start<a.seconds],key=lambda n:n.start)
 if not notes or max(n.end for n in notes)<a.seconds*.8: raise RuntimeError("Source MIDI too short")
