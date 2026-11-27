@@ -14,7 +14,7 @@ root.mkdir(parents=True,exist_ok=True)
 from request import normalize,command
 r=normalize(json.loads(a.request.read_text()))
 nature_only=not r["instruments"]
-fast=r["engine"]=="fast"
+fast=r["engine"] in ("fast","studio")
 started_job=time.monotonic()
 print("AURALUNA STAGE: restoring acoustic assets",flush=True)
 inputs=Path("/kaggle/input")
