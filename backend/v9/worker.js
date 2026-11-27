@@ -35,6 +35,11 @@ function validate(r){
   if(!e||typeof e!=="object"||!/^auraluna-[a-f0-9]{32}$/.test(e.slug)||![1,2,3].includes(e.variation)||!["wav","flac"].includes(e.format)||out.format!=="flac"||out.variations!==1||out.seconds<75||out.seconds>900)throw Error("Extension requires a 60-second lossless preview, one FLAC output and total duration 75–900 seconds.");
   out.extension={slug:e.slug,variation:e.variation,format:e.format};
  }
+ if(r.regenerate!==undefined){
+  const g=r.regenerate;
+  if(!g||typeof g!=="object"||!/^auraluna-[a-f0-9]{32}$/.test(g.slug)||![1,2,3].includes(g.variation)||!instruments.includes(g.instrument)||out.instruments?.length!==1||out.instruments[0]!==g.instrument||out.format!=="flac"||out.seconds>60||out.variations!==1||out.tuning!=="standard"||out.engine!=="fast"||out.nature!=="none"||Object.keys(out.nature_layers||{}).length||out.extension)throw Error("Invalid single instrument regeneration");
+  out.regenerate={slug:g.slug,variation:g.variation,instrument:g.instrument};
+ }
  return out;
 }
 // Kaggle output links can use Kaggle download gateways or Google storage.
@@ -74,7 +79,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V27-multitrack",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V28-instrument-regeneration",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -104,7 +109,7 @@ export default {async fetch(req,env){
       "subprocess.run([sys.executable, str(engine / 'cloud_runner.py'), str(request)], check=True)"
     ].join("\n");
     // A script kernel keeps submitted source small; no credentials in notebook source.
-    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:r.extension?[env.KAGGLE_USERNAME+"/"+r.extension.slug]:[],competitionDataSources:[],modelDataSources:[]});
+    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:r.extension||r.regenerate?[env.KAGGLE_USERNAME+"/"+(r.extension||r.regenerate).slug]:[],competitionDataSources:[],modelDataSources:[]});
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
     return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,seed:["fast","studio"].includes(r.engine)?(r.seed||r.job):null,seedVariation:r.seed_variation,mastering:r.mastering,tuning:r.tuning,composition:["fast","studio"].includes(r.engine)&&!natureOnly?r.composition:null},202);
   }
@@ -117,13 +122,13 @@ export default {async fetch(req,env){
   }
   if(url.pathname==="/outputs"&&req.method==="GET"){
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
-    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(f.fileName||""));
+    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|score\.mid|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(f.fileName||""));
     // Return names only; signed output URLs must be requested separately.
     return reply({files:files.map(f=>({name:f.fileName}))});
   }
   if(["/download","/file"].includes(url.pathname)&&req.method==="GET"){
     const name=url.searchParams.get("file")||"";
-    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(name))return reply({error:"Invalid output file"},400);
+    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|score\.mid|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(name))return reply({error:"Invalid output file"},400);
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
     const file=(result.files||[]).find(f=>f.fileName===name);
     if(!file?.url)return reply({error:"Output not available"},404);
@@ -131,7 +136,7 @@ export default {async fetch(req,env){
     const filename=name.split("/").pop();
     if(url.pathname==="/file"){
      const r=await fetchOutput(signed);
-     const type=filename.endsWith(".mp3")?"audio/mpeg":filename.endsWith(".m4a")?"audio/mp4":filename.endsWith(".wav")?"audio/wav":filename.endsWith(".flac")?"audio/flac":"application/json";
+     const type=filename.endsWith(".mp3")?"audio/mpeg":filename.endsWith(".m4a")?"audio/mp4":filename.endsWith(".wav")?"audio/wav":filename.endsWith(".flac")?"audio/flac":filename.endsWith(".mid")?"audio/midi":"application/json";
      const outHeaders={...headers,"Content-Type":type,"Content-Disposition":'attachment; filename="'+filename+'"',"X-Content-Type-Options":"nosniff"};
      return new Response(r.body,{status:200,headers:outHeaders});
     }
