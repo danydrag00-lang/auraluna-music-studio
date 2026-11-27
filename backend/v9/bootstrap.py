@@ -33,6 +33,9 @@ if not (ROOT/"setup-complete").exists():
     if missing:run([sys.executable,"-m","pip","install","-q",*missing])
     print("PERF reused preinstalled tools and packages where available",flush=True)
     (ROOT/"setup-complete").touch()
+if "--acoustic-only" in sys.argv:
+    print("Acoustic rendering tools ready; skipping Aria setup.",flush=True)
+    raise SystemExit(0)
 if not (REPO/".git").exists():
     run(["git","clone","--depth","1","https://github.com/EleutherAI/aria.git",str(REPO)])
 if not (ENV/"bin/aria").exists():
