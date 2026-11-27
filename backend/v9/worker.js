@@ -79,7 +79,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V29-long-join",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V30-cloud-archive",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -131,6 +131,64 @@ export default {async fetch(req,env){
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
     return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,seed:["fast","studio"].includes(r.engine)?(r.seed||r.job):null,seedVariation:r.seed_variation,mastering:r.mastering,tuning:r.tuning,composition:["fast","studio"].includes(r.engine)&&!natureOnly?r.composition:null},202);
   }
+
+  if(url.pathname.startsWith("/archive")){
+   const bucket=env.AURALUNA_ARCHIVE;
+   if(!bucket)return reply({error:"Private R2 archive is not configured"},503);
+   const prefix="auraluna/v1/";
+   if(url.pathname==="/archive/list"&&req.method==="GET"){
+    const cursor=url.searchParams.get("cursor")||undefined;
+    const page=await bucket.list({prefix,limit:100,include:["customMetadata"],...(cursor?{cursor}:{})});
+    return reply({entries:page.objects.filter(o=>o.key.endsWith("/manifest.json")).map(o=>({id:o.key.slice(prefix.length,-"/manifest.json".length),...o.customMetadata})),cursor:page.truncated?page.cursor:null});
+   }
+   const slug=url.searchParams.get("slug")||"",name=url.searchParams.get("file")||"";
+   const match=/^results\/variation_([1-3])_music\.(mp3|m4a|wav|flac)$/.exec(name);
+   if(!/^auraluna-[a-f0-9]{32}$/.test(slug)||!match)return reply({error:"Invalid archive identity"},400);
+   const base=prefix+slug+"/variation_"+match[1]+"_"+match[2]+"/",manifestKey=base+"manifest.json";
+   const type={mp3:"audio/mpeg",m4a:"audio/mp4",wav:"audio/wav",flac:"audio/flac"}[match[2]];
+   if(url.pathname==="/archive/save"&&req.method==="POST"){
+    const prior=await bucket.head(manifestKey);
+    if(prior)return reply({saved:true,alreadySaved:true,...prior.customMetadata});
+    const result=await call("ListKernelSessionOutput",{userName:env.KAGGLE_USERNAME,kernelSlug:slug,pageSize:100});
+    const names=[name,"results/variation_"+match[1]+"_completed.json","results/variation_"+match[1]+"_licences.json"];
+    const files=names.map(n=>(result.files||[]).find(f=>f.fileName===n&&f.url));
+    if(files.some(f=>!f))return reply({error:"Complete audio and both reports must be available"},409);
+    const reports=[];
+    for(let i=1;i<3;i++){
+     const response=await fetchOutput(trustedOutput(files[i].url));
+     const length=Number(response.headers.get("content-length")||0);
+     if(length>1024*1024)throw Error("Report too large");
+     const reader=response.body.getReader();let total=0;const parts=[];
+     try{while(true){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>1024*1024)throw Error("Report too large");parts.push(value)}}finally{await reader.cancel().catch(()=>{})}
+     const bytes=new Uint8Array(total);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.byteLength}
+     reports.push(JSON.parse(new TextDecoder().decode(bytes)));
+    }
+    if(!reports[0]?.quality?.status||!Number.isFinite(reports[0]?.seconds)||reports[0].seconds<=0||!Array.isArray(reports[1]))throw Error("Missing production validation or licence report");
+    const audio=await fetchOutput(trustedOutput(files[0].url));
+    const size=Number(audio.headers.get("content-length")||0);
+    if(!Number.isSafeInteger(size)||size<=0||size>2*1024**3){await audio.body?.cancel();return reply({error:"Archive requires a known file length up to 2 GiB"},413)}
+    const stream=new FixedLengthStream(size);
+    const pumping=audio.body.pipeTo(stream.writable);
+    try{await Promise.all([bucket.put(base+"audio."+match[2],stream.readable,{httpMetadata:{contentType:type}}),pumping])}catch(e){await pumping.catch(()=>{});throw e}
+    const stored=await bucket.head(base+"audio."+match[2]);if(!stored||stored.size!==size)throw Error("Archived file size mismatch");
+    await bucket.put(base+"completed.json",JSON.stringify(reports[0]),{httpMetadata:{contentType:"application/json"}});
+    await bucket.put(base+"licences.json",JSON.stringify(reports[1]),{httpMetadata:{contentType:"application/json"}});
+    const meta={slug,name,size:String(size),seconds:String(reports[0].seconds),savedAt:new Date().toISOString()};
+    await bucket.put(manifestKey,JSON.stringify(meta),{customMetadata:meta,httpMetadata:{contentType:"application/json"}});
+    return reply({saved:true,...meta});
+   }
+   if(url.pathname==="/archive/file"&&req.method==="GET"){
+    if(!await bucket.head(manifestKey))return reply({error:"Archive entry not found"},404);
+    const kind=url.searchParams.get("kind")||"audio";
+    if(!["audio","completed","licences"].includes(kind))return reply({error:"Invalid archive file kind"},400);
+    const filename=kind==="audio"?"audio."+match[2]:kind+".json";
+    const obj=await bucket.get(base+filename);
+    if(!obj)return reply({error:"Archived object unavailable"},404);
+    return new Response(obj.body,{headers:{...headers,"Content-Type":kind==="audio"?type:"application/json","Content-Length":String(obj.size),"Content-Disposition":'attachment; filename="'+(kind==="audio"?name.split("/").pop():filename)+'"',"X-Content-Type-Options":"nosniff"}});
+   }
+   return reply({error:"Unknown archive operation"},404);
+  }
+
   const slug=url.searchParams.get("slug")||"";
   if(!/^auraluna-[a-f0-9]{32}$/.test(slug))return reply({error:"Invalid production slug"},400);
   const query={userName:env.KAGGLE_USERNAME,kernelSlug:slug};
