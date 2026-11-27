@@ -153,6 +153,7 @@ for v in range(1,a.variations+1):
             env=dict(os.environ,AURALUNA_ROOT=str(isolated),AURALUNA_TONIC=str([48,50,53,55,57][int(hashlib.sha256((creative_seed+str(musical_v)).encode()).hexdigest(),16)%5]))
             if a.engine in ("fast","studio"):env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(musical_v,i,"performance"))
             env.update(AURALUNA_SECTION=str(i),AURALUNA_SECTIONS=str(count),AURALUNA_MOTIF_SEED=str(int(hashlib.sha256((creative_seed+":"+str(musical_v)+(":"+str(i) if a.composition=="independent" else "")).encode()).hexdigest()[:16],16)),AURALUNA_COMPOSITION=a.composition)
+            if a.seconds<=60 and count==1 and a.tuning=="standard":env["AURALUNA_STEMS"]="1"
             for attempt in range(3):
                 if a.engine in ("fast","studio"):
                     env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(musical_v,i,attempt,"performance"))
@@ -192,6 +193,9 @@ for v in range(1,a.variations+1):
                     # Section renderer already writes lossless PCM24 checkpoints.
                     shutil.move(str(source),str(temp));os.replace(temp,dest)
                     shutil.copy2(midi,folder/f"section_{i:04d}.mid")
+                    for stem in ensemble.glob("stem_*.flac"):
+                        if not valid(stem,section_seconds*SR):raise RuntimeError("Invalid acoustic stem")
+                        shutil.copy2(stem,folder/stem.name)
                     state["sections"][key]={"signature":signature,"fingerprint":fingerprint,"similarity":maximum,"instrument_events":rendered,"file":str(dest.relative_to(job))}
                     save();break
                 except (subprocess.CalledProcessError,RuntimeError,ValueError):
@@ -437,6 +441,7 @@ for v in range(1,a.variations+1):
         if normalization["peak_constrained"]:quality["warnings"].append("Loudness target limited by peak headroom or maximum gain; dynamics preserved.")
     quality["seed_variation"]=musical_v
     quality["composition_seed"]=creative_seed if a.engine in ("fast","studio") else None
+    quality["stems"]={"available":[p.name for p in sorted(folder.glob("stem_*.flac"))],"scope":"Instrument stems before shared room effect, ensemble normalization, nature mix and final mastering; not an exact reconstruction of the mastered track."}
     quality["nature_layers_db"]=layers
     quality["nature_mix_normalization"]=layer_scale
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
