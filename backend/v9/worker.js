@@ -74,7 +74,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V26-preview-extension",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V27-multitrack",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -117,13 +117,13 @@ export default {async fetch(req,env){
   }
   if(url.pathname==="/outputs"&&req.method==="GET"){
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
-    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json)$/.test(f.fileName||""));
+    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(f.fileName||""));
     // Return names only; signed output URLs must be requested separately.
     return reply({files:files.map(f=>({name:f.fileName}))});
   }
   if(["/download","/file"].includes(url.pathname)&&req.method==="GET"){
     const name=url.searchParams.get("file")||"";
-    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json)$/.test(name))return reply({error:"Invalid output file"},400);
+    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(name))return reply({error:"Invalid output file"},400);
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
     const file=(result.files||[]).find(f=>f.fileName===name);
     if(!file?.url)return reply({error:"Output not available"},404);
