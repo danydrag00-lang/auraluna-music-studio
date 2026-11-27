@@ -323,7 +323,7 @@ for v in range(1,a.variations+1):
             if attempt==2:raise RuntimeError("Encoded audio exceeds true-peak ceiling after retries")
             gain-=tp+1.5
             run(["ffmpeg","-y","-loglevel","error","-i",str(intermediate),"-af",f"volume={gain:.6f}dB,aresample=192000,alimiter=limit=0.794328:attack=5:release=100:level=false:latency=true,aresample=48000",*codec,str(temp)],folder/"export.log")
-        normalization.update(applied_gain_db=gain,verified_true_peak_dbtp=tp,limiter_oversampling=4,encoding_attempts=attempt+1)
+        normalization.update(applied_gain_db=gain,peak_constrained=gain<(-16.0-source_lufs)-0.05,verified_true_peak_dbtp=tp,limiter_oversampling=4,encoding_attempts=attempt+1)
         intermediate.unlink()
     # Verify the encoded audio by decoding it in bounded blocks; never load an hour into RAM.
     decoded_frames=0; decoded_peak=0.0; decoded_energy=0.0; quiet_run=0; longest_quiet=0
