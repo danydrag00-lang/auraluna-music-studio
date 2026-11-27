@@ -7,7 +7,7 @@ const nature=["none","rain","river","ocean","forest"];
 function validate(r){
  if(!r||typeof r!=="object"||Array.isArray(r))throw Error("Invalid request");
  const out={job:crypto.randomUUID().replaceAll("-",""),seconds:r.seconds??120,variations:r.variations??1,format:r.format??"mp3",prompt:r.prompt??"",engine:r.engine??"aria",composition:r.composition??"independent",tuning:r.tuning??"standard"};
- if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>3600)throw Error("Choose 15 seconds to 60 minutes.");
+ if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>43200)throw Error("Choose 15 seconds to 12 hours.");
  if(!Number.isInteger(out.variations)||out.variations<1||out.variations>3)throw Error("Choose one to three variations.");
  if(!["mp3","flac","wav"].includes(out.format)||typeof out.prompt!=="string"||out.prompt.length>2000)throw Error("Invalid format or prompt");
  if(r.preset!==undefined){if(!presets.includes(r.preset))throw Error("Invalid preset");out.preset=r.preset}
@@ -23,7 +23,7 @@ function validate(r){
  if(out.seconds>900&&!natureOnly&&out.engine==="aria")throw Error("Aria supports up to 15 minutes.");
  if(natureOnly&&out.tuning!=="standard")throw Error("Tuning requires instruments");
  if(natureOnly&&out.variations!==1)throw Error("Nature-only mode supports one variation.");
- if(out.seconds*out.variations>(out.engine==="aria"&&!natureOnly?900:3600))throw Error("Combined duration exceeds the per-job limit.");
+ if(out.seconds*out.variations>(natureOnly?43200:out.engine==="aria"?900:3600))throw Error("Combined duration exceeds the per-job limit.");
  if(out.seconds>900&&out.format!=="mp3")throw Error("For tracks longer than 15 minutes, choose MP3.");
  return out;
 }
@@ -64,7 +64,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V17-tuning",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V18-long-nature",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
