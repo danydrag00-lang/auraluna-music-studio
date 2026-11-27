@@ -6,7 +6,7 @@ const instruments=["felt_piano","grand_piano","flute","cello","harp","handpan","
 const nature=["none","rain","river","ocean","forest"];
 function validate(r){
  if(!r||typeof r!=="object"||Array.isArray(r))throw Error("Invalid request");
- const out={job:crypto.randomUUID().replaceAll("-",""),seconds:r.seconds??120,variations:r.variations??1,format:r.format??"mp3",prompt:r.prompt??"",engine:r.engine??"aria",composition:r.composition??"independent",tuning:r.tuning??"standard",aac_mode:r.aac_mode??"premium"};
+ const out={job:crypto.randomUUID().replaceAll("-",""),seconds:r.seconds??120,variations:r.variations??1,format:r.format??"mp3",prompt:r.prompt??"",engine:r.engine??"aria",composition:r.composition??"independent",tuning:r.tuning??"standard",aac_mode:r.aac_mode??"premium",seed:r.seed??""};
  if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>43200)throw Error("Choose 15 seconds to 12 hours.");
  if(!Number.isInteger(out.variations)||out.variations<1||out.variations>3)throw Error("Choose one to three variations.");
  if(!["mp3","m4a","flac","wav"].includes(out.format)||typeof out.prompt!=="string"||out.prompt.length>2000)throw Error("Invalid format or prompt");
@@ -23,6 +23,7 @@ function validate(r){
  if(!["aria","fast"].includes(out.engine))throw Error("Invalid composition engine");
  const natureOnly=Array.isArray(out.instruments)&&out.instruments.length===0&&nature.includes(out.nature)&&out.nature!=="none";
  if(out.seconds>900&&!natureOnly&&out.engine==="aria")throw Error("Aria supports up to 15 minutes.");
+ if(typeof out.seed!=="string"||(out.seed&&(out.engine!=="fast"||natureOnly||!Array.isArray(out.instruments)||!out.instruments.length||!/^[A-Za-z0-9]{1,48}$/.test(out.seed))))throw Error("Seed requires manual Fast Acoustic instruments and 1–48 ASCII letters or digits");
  if(natureOnly&&out.tuning!=="standard")throw Error("Tuning requires instruments");
  if(natureOnly&&out.variations!==1)throw Error("Nature-only mode supports one variation.");
  if(out.seconds*out.variations>(natureOnly?43200:out.engine==="aria"?900:3600))throw Error("Combined duration exceeds the per-job limit.");
@@ -66,7 +67,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V21-aac-balanced",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V22-seeded-acoustic",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -98,7 +99,7 @@ export default {async fetch(req,env){
     // A script kernel keeps submitted source small; no credentials in notebook source.
     const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
-    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,tuning:r.tuning,composition:r.engine==="fast"&&!natureOnly?r.composition:null},202);
+    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,seed:r.engine==="fast"?(r.seed||r.job):null,tuning:r.tuning,composition:r.engine==="fast"&&!natureOnly?r.composition:null},202);
   }
   const slug=url.searchParams.get("slug")||"";
   if(!/^auraluna-[a-f0-9]{32}$/.test(slug))return reply({error:"Invalid production slug"},400);
