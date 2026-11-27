@@ -157,20 +157,40 @@ def place(x,name):
     return x
 for name,ns in parts.items():
     if name in ("bansuri","singing_bowls"):
-        path=next((root/"instruments"/name).rglob("*.wav"))
+        candidates=sorted((root/"instruments"/name).rglob("*.wav"))
+        if not candidates:raise RuntimeError("No recorded samples for "+name)
+        path=candidates[int(rng.integers(len(candidates)))]
         recording=stereo(load(str(path)))
         x=np.zeros((frames,2),np.float32)
         if name=="bansuri":
             # Recorded phrase, not a chromatic instrument. Keep original pitch.
-            offset=int(rng.integers(0,max(1,len(recording)-frames+1)))
-            segment=recording[offset:offset+frames]
-            segment=segment.copy()
-            fade=min(SR//2,len(segment)//4)
-            if fade:
-                segment[:fade]*=np.linspace(0,1,fade,dtype=np.float32)[:,None]
-                segment[-fade:]*=np.linspace(1,0,fade,dtype=np.float32)[:,None]
-            x[:len(segment)]=segment
-            report[name]=1
+            # Use a continuous excerpt when available. For shorter recordings,
+            # alternate intact excerpts and gentle pauses rather than leaving a long empty tail.
+            if len(recording)<SR:raise RuntimeError("Bansuri recording too short")
+            cursor=0; phrases=0; previous_offset=None
+            while cursor<frames:
+                remaining=frames-cursor
+                length=min(len(recording),remaining)
+                if length<SR//2:break
+                if len(recording)>remaining:
+                    length=remaining
+                elif len(recording)>SR*18:
+                    length=min(length,int(SR*rng.uniform(12,24)))
+                max_offset=len(recording)-length
+                offset=int(rng.integers(0,max_offset+1))
+                if previous_offset is not None and max_offset>SR*2 and abs(offset-previous_offset)<SR:
+                    offset=(offset+max_offset//2)%(max_offset+1)
+                segment=recording[offset:offset+length].copy()
+                fade=min(SR//2,len(segment)//4)
+                if fade:
+                    envelope=(.5-.5*np.cos(np.linspace(0,np.pi,fade,dtype=np.float32)))[:,None]
+                    segment[:fade]*=envelope
+                    segment[-fade:]*=envelope[::-1]
+                segment*=float(rng.uniform(.92,1.0))
+                x[cursor:cursor+length]+=segment
+                phrases+=1;previous_offset=offset
+                cursor+=length+int(SR*rng.uniform(1.0,2.8))
+            report[name]=phrases
         else:
             starts=[0]
             while starts[-1]+SR*22<frames:
