@@ -23,13 +23,13 @@ function fixtureWav(seconds=60){
   const page=await browser.newPage(),errors=[],requests=[];
   page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message)});
   const slug='auraluna-'+'a'.repeat(32),wave=fixtureWav();
-  const files=[1,2,3].flatMap(v=>['music.wav','completed.json','licences.json'].map(name=>({name:'variation_'+v+'/'+name})));
+  const files=[1,2,3].flatMap(v=>['music.wav','completed.json','licences.json'].map(name=>({name:'results/variation_'+v+'_'+name})));
   await page.route('https://auraluna-api.dhanushmanoharan1996.workers.dev/**',async route=>{
    const req=route.request(),u=new URL(req.url());
    const headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type','access-control-allow-methods':'GET, POST, OPTIONS'};
    const json=data=>route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(data)});
    if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
-   if(u.pathname==='/health')return json({version:'V25-studio-premium',configured:true,cpuRouting:true});
+   if(u.pathname==='/health')return json({version:'V28-instrument-regeneration',configured:true,cpuRouting:true});
    assert.equal(req.headers().authorization,'Bearer smoke-test-only');
    if(u.pathname==='/test-kaggle')return json({ok:true});
    if(u.pathname==='/generate'){requests.push(req.postDataJSON());return json({slug,compute:'CPU',seed:'SmokeSeed',seedVariation:1,composition:'thematic',aacMode:'premium',tuning:'standard'});}
@@ -43,6 +43,8 @@ function fixtureWav(seconds=60){
   assert.equal(await page.locator('#generate').isDisabled(),true);
   await page.fill('#access-key','smoke-test-only');await page.click('#connect');
   await page.locator('#generate:enabled').waitFor();
+  await page.selectOption('#mode','manual');
+  await page.selectOption('#preset','peaceful_piano');
   await page.selectOption('#composition-engine','studio');
   await page.selectOption('#composition-style','thematic');
   await page.selectOption('#format','wav');
@@ -57,6 +59,8 @@ function fixtureWav(seconds=60){
   const metrics=await page.locator('#players audio').first().evaluate(async a=>{const ctx=new AudioContext();try{const b=await ctx.decodeAudioData(await(await fetch(a.src)).arrayBuffer());let peak=0,sum=0,n=0;for(const x of b.getChannelData(0)){peak=Math.max(peak,Math.abs(x));sum+=x*x;n++;}return {duration:b.duration,peak,rms:Math.sqrt(sum/n)}}finally{await ctx.close()}});
   assert.ok(Math.abs(metrics.duration-60)<.01);assert.ok(metrics.peak>.001&&metrics.peak<.99);assert.ok(metrics.rms>.0001);
   await page.waitForFunction(()=>document.querySelector('#players .v9-waveform input:not(:disabled)'));
+  await page.getByRole('button',{name:'Save audio locally',exact:true}).first().click();
+  await page.waitForFunction(()=>document.querySelector('#archive-list').textContent.includes('variation_1_music.wav'));
   assert.equal(errors.length,0,errors.join('; '));
   console.log('Cloud studio smoke test passed with mocked API and deterministic WAV fixture',metrics);
  }finally{await browser?.close();server.close();}
