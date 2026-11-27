@@ -79,7 +79,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V30-cloud-archive",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V31-archive-guard",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -135,7 +135,20 @@ export default {async fetch(req,env){
   if(url.pathname.startsWith("/archive")){
    const bucket=env.AURALUNA_ARCHIVE;
    if(!bucket)return reply({error:"Private R2 archive is not configured"},503);
-   const prefix="auraluna/v1/";
+   const prefix="auraluna/v1/",limit=9000000000,warning=8000000000,lockKey="auraluna/system/archive-write-lock";
+   async function usage(){
+    let cursor,bytes=0,objects=0;
+    do{const page=await bucket.list({limit:1000,...(cursor?{cursor}:{})});for(const o of page.objects){bytes+=o.size;objects++}cursor=page.truncated?page.cursor:undefined;}while(cursor);
+    return {bytes,objects,limit,warning,remaining:Math.max(0,limit-bytes),scope:"This R2 bucket only"};
+   }
+   if(url.pathname==="/archive/usage"&&req.method==="GET")return reply(await usage());
+   // Atomic conditional create: never expire or steal a lock while a writer may still be active.
+   async function withArchiveLock(action){
+    const token=crypto.randomUUID();
+    const held=await bucket.put(lockKey,token,{onlyIf:new Headers({"If-None-Match":"*"})});
+    if(!held)return reply({error:"Archive write in progress or interrupted. Verify active requests before clearing the lock in the R2 dashboard."},409);
+    try{return await action()}finally{await bucket.delete(lockKey)}
+   }
    if(url.pathname==="/archive/list"&&req.method==="GET"){
     const cursor=url.searchParams.get("cursor")||undefined;
     const page=await bucket.list({prefix,limit:100,include:["customMetadata"],...(cursor?{cursor}:{})});
@@ -146,7 +159,7 @@ export default {async fetch(req,env){
    if(!/^auraluna-[a-f0-9]{32}$/.test(slug)||!match)return reply({error:"Invalid archive identity"},400);
    const base=prefix+slug+"/variation_"+match[1]+"_"+match[2]+"/",manifestKey=base+"manifest.json";
    const type={mp3:"audio/mpeg",m4a:"audio/mp4",wav:"audio/wav",flac:"audio/flac"}[match[2]];
-   if(url.pathname==="/archive/save"&&req.method==="POST"){
+   if(url.pathname==="/archive/save"&&req.method==="POST")return await withArchiveLock(async()=>{
     const prior=await bucket.head(manifestKey);
     if(prior)return reply({saved:true,alreadySaved:true,...prior.customMetadata});
     const result=await call("ListKernelSessionOutput",{userName:env.KAGGLE_USERNAME,kernelSlug:slug,pageSize:100});
@@ -167,6 +180,10 @@ export default {async fetch(req,env){
     const audio=await fetchOutput(trustedOutput(files[0].url));
     const size=Number(audio.headers.get("content-length")||0);
     if(!Number.isSafeInteger(size)||size<=0||size>2*1024**3){await audio.body?.cancel();return reply({error:"Archive requires a known file length up to 2 GiB"},413)}
+    const current=await usage();
+    // Include the old incomplete objects in the usage total and reserve space for reports.
+    const required=size+3*1024*1024;
+    if(current.bytes+required>limit){await audio.body?.cancel();return reply({error:"9 GB archive safeguard: insufficient storage. Download and remove old audio first.",...current},409)}
     const stream=new FixedLengthStream(size);
     const pumping=audio.body.pipeTo(stream.writable);
     try{await Promise.all([bucket.put(base+"audio."+match[2],stream.readable,{httpMetadata:{contentType:type}}),pumping])}catch(e){await pumping.catch(()=>{});throw e}
@@ -176,7 +193,14 @@ export default {async fetch(req,env){
     const meta={slug,name,size:String(size),seconds:String(reports[0].seconds),savedAt:new Date().toISOString()};
     await bucket.put(manifestKey,JSON.stringify(meta),{customMetadata:meta,httpMetadata:{contentType:"application/json"}});
     return reply({saved:true,...meta});
-   }
+   });
+   if(url.pathname==="/archive/delete"&&req.method==="POST")return withArchiveLock(async()=>{
+    const body=await req.json();if(body?.confirm!==name)return reply({error:"Explicit matching file confirmation required"},400);
+    // Remove manifest first so no incomplete entry is presented as available.
+    await bucket.delete(manifestKey);
+    await bucket.delete([base+"audio."+match[2],base+"completed.json",base+"licences.json"]);
+    return reply({deleted:true,...await usage()});
+   });
    if(url.pathname==="/archive/file"&&req.method==="GET"){
     if(!await bucket.head(manifestKey))return reply({error:"Archive entry not found"},404);
     const kind=url.searchParams.get("kind")||"audio";
