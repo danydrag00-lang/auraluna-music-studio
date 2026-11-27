@@ -56,7 +56,7 @@ def seed_for(*parts):return int(hashlib.sha256(":".join(map(str,(creative_seed,*
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":19,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":20,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -215,7 +215,7 @@ for v in range(1,a.variations+1):
     @contextmanager
     def encoder():
         with (folder/"export.log").open("ab") as log:
-            proc=subprocess.Popen(["ffmpeg","-y","-loglevel","error","-f","f32le","-ar",str(SR),"-ac","2","-i","pipe:0",*codec,str(temp)],stdin=subprocess.PIPE,stdout=log,stderr=log)
+            proc=subprocess.Popen(["ffmpeg","-y","-loglevel","error","-f","f32le","-ar",str(SR),"-ac","2","-i","pipe:0",*(["-c:a","flac","-sample_fmt","s32","-bits_per_raw_sample","24",str(intermediate)] if a.mastering=="youtube" else [*codec,str(temp)])],stdin=subprocess.PIPE,stdout=log,stderr=log)
             class Writer:
                 def write(self,x):proc.stdin.write(np.asarray(x,dtype="<f4").tobytes())
             try:
@@ -226,6 +226,7 @@ for v in range(1,a.variations+1):
                 proc.kill();proc.wait();raise
     master_gain,peak_ceiling,fade_in,fade_out={"original":(0,-8,6,8),"sleep":(-3,-10,10,15),"spa":(0,-8,8,12),"youtube":(3,-4,6,8)}[a.mastering]
     stats={"sum_squares":0.0,"samples":0,"peak":0.0,"limited_samples":0}
+    if a.mastering=="youtube" and shutil.disk_usage(folder).free<total*6+128*1024**2:raise RuntimeError("Insufficient space for lossless normalization master; choose Original mastering or a shorter duration")
     with encoder() as writer:
         def write(x):
             global pos
@@ -259,6 +260,21 @@ for v in range(1,a.variations+1):
         else:
             while pos<total:write(np.zeros((min(10*SR,total-pos),2),np.float32))
     if pos!=total:raise RuntimeError(f"Wrong frame count {pos} != {total}")
+    normalization=None
+    if a.mastering=="youtube":
+        # Measure a lossless intermediate, then apply constant gain before the only lossy encode.
+        # Reserve extra peak headroom for codec overshoot. Never compress dynamics to hit a target.
+        import re
+        measured=subprocess.run(["ffmpeg","-hide_banner","-nostats","-v","info","-i",str(intermediate),"-af","ebur128=peak=true:framelog=verbose","-f","null","-"],capture_output=True,text=True,check=True)
+        summary=measured.stderr.rsplit("Summary:",1)[-1]
+        loud=re.search(r"I:\s*(-?\d+(?:\.\d+)?)\s*LUFS",summary)
+        peak=re.search(r"Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS",summary)
+        if not loud or not peak:raise RuntimeError("Cannot measure lossless master for normalization")
+        source_lufs=float(loud.group(1));source_peak=float(peak.group(1))
+        gain=min(12.0,-16.0-source_lufs,-2.0-source_peak)
+        normalization={"target_lufs":-16.0,"input_lufs":source_lufs,"input_true_peak_dbtp":source_peak,"applied_gain_db":gain,"pre_encode_true_peak_budget_dbtp":-2.0,"peak_constrained":gain<(-16.0-source_lufs)-0.05}
+        run(["ffmpeg","-y","-loglevel","error","-i",str(intermediate),"-af",f"volume={gain:.6f}dB",*codec,str(temp)],folder/"export.log")
+        intermediate.unlink()
     # Verify the encoded audio by decoding it in bounded blocks; never load an hour into RAM.
     decoded_frames=0; decoded_peak=0.0; decoded_energy=0.0; quiet_run=0; longest_quiet=0
     # Compact one-second spectral fingerprints, for screening repeated rendered passages.
@@ -367,6 +383,9 @@ for v in range(1,a.variations+1):
     quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
     quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":(192 if a.aac_mode=="balanced" else 256) if a.format=="m4a" and a.aac_mode!="vbr" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
     quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; not LUFS normalization or true-peak limiting."}
+    if normalization is not None:
+        quality["normalization"]=normalization
+        if normalization["peak_constrained"]:quality["warnings"].append("Loudness target limited by peak headroom or maximum gain; dynamics preserved.")
     quality["seed_variation"]=musical_v
     quality["composition_seed"]=creative_seed if a.engine=="fast" else None
     quality["nature_layers_db"]=layers
