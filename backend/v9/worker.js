@@ -9,7 +9,7 @@ function validate(r){
  const out={job:crypto.randomUUID().replaceAll("-",""),seconds:r.seconds??120,variations:r.variations??1,format:r.format??"mp3",prompt:r.prompt??"",engine:r.engine??"aria",composition:r.composition??"independent",tuning:r.tuning??"standard"};
  if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>43200)throw Error("Choose 15 seconds to 12 hours.");
  if(!Number.isInteger(out.variations)||out.variations<1||out.variations>3)throw Error("Choose one to three variations.");
- if(!["mp3","flac","wav"].includes(out.format)||typeof out.prompt!=="string"||out.prompt.length>2000)throw Error("Invalid format or prompt");
+ if(!["mp3","m4a","flac","wav"].includes(out.format)||typeof out.prompt!=="string"||out.prompt.length>2000)throw Error("Invalid format or prompt");
  if(r.preset!==undefined){if(!presets.includes(r.preset))throw Error("Invalid preset");out.preset=r.preset}
  if(r.instruments!==undefined){if(!Array.isArray(r.instruments)||r.instruments.some(x=>!instruments.includes(x))||new Set(r.instruments).size!==r.instruments.length)throw Error("Invalid instruments");out.instruments=r.instruments}
  if(r.nature!==undefined){if(!nature.includes(r.nature))throw Error("Invalid ambience");out.nature=r.nature}
@@ -24,7 +24,7 @@ function validate(r){
  if(natureOnly&&out.tuning!=="standard")throw Error("Tuning requires instruments");
  if(natureOnly&&out.variations!==1)throw Error("Nature-only mode supports one variation.");
  if(out.seconds*out.variations>(natureOnly?43200:out.engine==="aria"?900:3600))throw Error("Combined duration exceeds the per-job limit.");
- if(out.seconds>900&&out.format!=="mp3")throw Error("For tracks longer than 15 minutes, choose MP3.");
+ if(out.seconds>900&&!["mp3","m4a"].includes(out.format))throw Error("For tracks longer than 15 minutes, choose MP3 or YouTube Ready AAC.");
  return out;
 }
 // Kaggle output links can use Kaggle download gateways or Google storage.
@@ -64,7 +64,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V18-long-nature",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V19-youtube-ready",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -107,13 +107,13 @@ export default {async fetch(req,env){
   }
   if(url.pathname==="/outputs"&&req.method==="GET"){
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
-    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|wav|flac)|licences\.json|completed\.json)$/.test(f.fileName||""));
+    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json)$/.test(f.fileName||""));
     // Return names only; signed output URLs must be requested separately.
     return reply({files:files.map(f=>({name:f.fileName}))});
   }
   if(["/download","/file"].includes(url.pathname)&&req.method==="GET"){
     const name=url.searchParams.get("file")||"";
-    if(!/^results\/variation_[1-3]_(music\.(mp3|wav|flac)|licences\.json|completed\.json)$/.test(name))return reply({error:"Invalid output file"},400);
+    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json)$/.test(name))return reply({error:"Invalid output file"},400);
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
     const file=(result.files||[]).find(f=>f.fileName===name);
     if(!file?.url)return reply({error:"Output not available"},404);
@@ -121,7 +121,7 @@ export default {async fetch(req,env){
     const filename=name.split("/").pop();
     if(url.pathname==="/file"){
      const r=await fetchOutput(signed);
-     const type=filename.endsWith(".mp3")?"audio/mpeg":filename.endsWith(".wav")?"audio/wav":filename.endsWith(".flac")?"audio/flac":"application/json";
+     const type=filename.endsWith(".mp3")?"audio/mpeg":filename.endsWith(".m4a")?"audio/mp4":filename.endsWith(".wav")?"audio/wav":filename.endsWith(".flac")?"audio/flac":"application/json";
      const outHeaders={...headers,"Content-Type":type,"Content-Disposition":'attachment; filename="'+filename+'"',"X-Content-Type-Options":"nosniff"};
      return new Response(r.body,{status:200,headers:outHeaders});
     }
