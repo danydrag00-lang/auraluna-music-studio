@@ -38,6 +38,10 @@ def note(p,s,e,v):
 parts={n:[] for n in names}
 for name in ("felt_piano","grand_piano"):
     if name in parts: parts[name]=[note(n.pitch,n.start,n.end,n.velocity) for n in notes]
+if os.environ.get("AURALUNA_REGENERATE")=="1":
+    for name in ("felt_piano","grand_piano"):
+        if name in parts:
+            parts[name]=[note(n.pitch,max(0,n.start+float(rng.uniform(-.025,.025))),max(n.start+.05,n.end+float(rng.uniform(-.04,.04))),int(np.clip(n.velocity+rng.integers(-4,5),28,68))) for n in notes if n.start<a.seconds-.05]
 last=69
 if "handpan" in parts:
     import fluidsynth
