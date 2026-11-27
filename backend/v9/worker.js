@@ -30,6 +30,11 @@ function validate(r){
  if(natureOnly&&out.variations!==1)throw Error("Nature-only mode supports one variation.");
  if(out.seconds*out.variations>(natureOnly?43200:out.engine==="aria"?900:3600))throw Error("Combined duration exceeds the per-job limit.");
  if(out.seconds>900&&!["mp3","m4a"].includes(out.format))throw Error("For tracks longer than 15 minutes, choose MP3 or YouTube Ready AAC.");
+ if(r.extension!==undefined){
+  const e=r.extension;
+  if(!e||typeof e!=="object"||!/^auraluna-[a-f0-9]{32}$/.test(e.slug)||![1,2,3].includes(e.variation)||!["wav","flac"].includes(e.format)||out.format!=="flac"||out.variations!==1||out.seconds<75||out.seconds>900)throw Error("Extension requires a 60-second lossless preview, one FLAC output and total duration 75–900 seconds.");
+  out.extension={slug:e.slug,variation:e.variation,format:e.format};
+ }
  return out;
 }
 // Kaggle output links can use Kaggle download gateways or Google storage.
@@ -69,7 +74,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V25-studio-premium",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V26-preview-extension",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -99,7 +104,7 @@ export default {async fetch(req,env){
       "subprocess.run([sys.executable, str(engine / 'cloud_runner.py'), str(request)], check=True)"
     ].join("\n");
     // A script kernel keeps submitted source small; no credentials in notebook source.
-    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
+    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:r.extension?[env.KAGGLE_USERNAME+"/"+r.extension.slug]:[],competitionDataSources:[],modelDataSources:[]});
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
     return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,seed:["fast","studio"].includes(r.engine)?(r.seed||r.job):null,seedVariation:r.seed_variation,mastering:r.mastering,tuning:r.tuning,composition:["fast","studio"].includes(r.engine)&&!natureOnly?r.composition:null},202);
   }
