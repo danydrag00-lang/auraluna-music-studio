@@ -26,6 +26,7 @@ PRESETS={
 }
 p=argparse.ArgumentParser()
 p.add_argument("--preset",choices=PRESETS,default="luxury_spa")
+p.add_argument("--engine",choices=["aria","fast"],default="aria")
 p.add_argument("--seconds",type=int,default=120)
 p.add_argument("--job",default=None)
 p.add_argument("--max-sections",type=int,default=2)
@@ -44,7 +45,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -111,10 +112,10 @@ for v in range(1,a.variations+1):
             isolated=Path(tmp)
             for d in ("models","instruments","nature","licenses"):
                 (isolated/d).symlink_to(ROOT/d,target_is_directory=True)
-            env=dict(os.environ,AURALUNA_ROOT=str(isolated))
+            env=dict(os.environ,AURALUNA_ROOT=str(isolated),AURALUNA_TONIC=str([48,50,53,55,57][int(hashlib.sha256((job_id+str(v)).encode()).hexdigest(),16)%5]))
             for attempt in range(3):
                 try:
-                    run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds),"--midi-only"],folder/"compose.log",env)
+                    run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds),"--midi-only","--engine",a.engine],folder/"compose.log",env)
                     midi=max((isolated/"productions").rglob("arrangement.mid"),key=lambda p:p.stat().st_mtime)
                     # Hash note content, not MIDI file metadata.
                     import pretty_midi
@@ -191,7 +192,7 @@ for v in range(1,a.variations+1):
         d=json.loads(f.read_text())
         if (instruments and f.stem in instruments.split(",")) or (instruments and d.get("category","").removeprefix("instruments/") in instruments.split(",")) or d.get("category")=="nature/"+nature:records.append(d)
     (folder/"licences.json").write_text(json.dumps(records,indent=2))
-    done.write_text(json.dumps({"seconds":a.seconds,"sample_rate":SR,"file":final.name,"licence_note":"Review source attribution and model output rights; no legal clearance guarantee."},indent=2))
+    done.write_text(json.dumps({"engine":a.engine if mood else "nature","seconds":a.seconds,"sample_rate":SR,"file":final.name,"licence_note":"Review source attribution and model output rights; no legal clearance guarantee."},indent=2))
     for section in folder.glob("section_*.flac"):section.unlink()
     print(f"PERF final mix and export: {time.monotonic()-export_started:.1f}s",flush=True)
     print("COMPLETE:",final,flush=True)
