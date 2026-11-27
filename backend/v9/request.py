@@ -57,9 +57,11 @@ def normalize(r):
     if not isinstance(job,str) or not re.fullmatch(r"[A-Za-z0-9]{1,48}",job):raise ValueError("Job ID must be 1–48 ASCII letters or digits")
     gains=r.get("gains",{})
     if not isinstance(gains,dict) or any(k not in instruments or type(v) not in (int,float) or not math.isfinite(v) or not -60<=v<=12 for k,v in gains.items()):raise ValueError("Invalid gain offsets")
-    return dict(preset=preset,instruments=instruments,nature=nature,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
+    engine=r.get("engine","aria")
+    if engine not in ("aria","fast"):raise ValueError("Invalid composition engine")
+    return dict(engine=engine,preset=preset,instruments=instruments,nature=nature,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
 def command(r,budget):
-    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget)]
+    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria")]
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("request",type=Path)
