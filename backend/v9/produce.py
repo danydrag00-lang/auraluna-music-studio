@@ -35,6 +35,7 @@ p.add_argument("--seed",default="")
 p.add_argument("--seed-variation",type=int,default=1)
 p.add_argument("--max-sections",type=int,default=2)
 p.add_argument("--aac-mode",choices=["premium","vbr","balanced"],default="premium")
+p.add_argument("--mastering",choices=["original","sleep","spa","youtube"],default="original")
 p.add_argument("--format",choices=["mp3","m4a","flac","wav"],default="mp3")
 p.add_argument("--variations",type=int,choices=[1,2,3],default=1)
 p.add_argument("--gains",default="{}")
@@ -55,7 +56,7 @@ def seed_for(*parts):return int(hashlib.sha256(":".join(map(str,(creative_seed,*
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":17,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":18,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -223,6 +224,7 @@ for v in range(1,a.variations+1):
                 if proc.wait()!=0:raise RuntimeError("Encoding failed; inspect export.log")
             except BaseException:
                 proc.kill();proc.wait();raise
+    master_gain,peak_ceiling,fade_in,fade_out={"original":(0,-8,6,8),"sleep":(-3,-10,10,15),"spa":(0,-8,8,12),"youtube":(3,-4,6,8)}[a.mastering]
     stats={"sum_squares":0.0,"samples":0,"peak":0.0,"limited_samples":0}
     with encoder() as writer:
         def write(x):
@@ -233,9 +235,9 @@ for v in range(1,a.variations+1):
             for index,(name,loop) in enumerate(loops.items()):
                 modulation=(1+.035*np.sin(2*np.pi*ix/(SR*(97+index*23)))).astype(np.float32)
                 x+=loop[ix%len(loop)]*modulation[:,None]*(10**(layers[name]/20)/layer_scale)
-            fade=np.minimum(np.minimum(ix/(6*SR),(total-1-ix)/(8*SR)),1).clip(0,1)
-            x*=fade[:,None]
-            limit=10**(-8/20)
+            fade=np.minimum(np.minimum(ix/(fade_in*SR),(total-1-ix)/(fade_out*SR)),1).clip(0,1)
+            x*=fade[:,None]*(10**(master_gain/20))
+            limit=10**(peak_ceiling/20)
             if not np.isfinite(x).all():raise RuntimeError("Invalid samples in master")
             stats["limited_samples"]+=int(np.count_nonzero(np.abs(x)>limit))
             # Smooth peak limiting instead of hard clipping.
@@ -348,6 +350,7 @@ for v in range(1,a.variations+1):
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
     quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
     quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":(192 if a.aac_mode=="balanced" else 256) if a.format=="m4a" and a.aac_mode!="vbr" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
+    quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; not LUFS normalization or true-peak limiting."}
     quality["seed_variation"]=musical_v
     quality["composition_seed"]=creative_seed if a.engine=="fast" else None
     quality["nature_layers_db"]=layers
