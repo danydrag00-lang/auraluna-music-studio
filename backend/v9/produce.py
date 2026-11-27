@@ -56,7 +56,7 @@ def seed_for(*parts):return int(hashlib.sha256(":".join(map(str,(creative_seed,*
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":18,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":19,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -314,6 +314,22 @@ for v in range(1,a.variations+1):
     if rms<1e-5 or decoded_peak<1e-5:raise RuntimeError("Export is effectively silent")
     if decoded_peak>=.999:raise RuntimeError("Export reaches digital clipping threshold")
     quality={"status":"technical_checks_passed","decoded_seconds":decoded_frames/SR,"sample_rate":SR,"channels":2,"checkpoint_bits":24 if mood else None,"rms_dbfs":20*math.log10(max(rms,1e-12)),"sample_peak_dbfs":20*math.log10(max(decoded_peak,1e-12)),"longest_very_quiet_seconds":longest_quiet/SR,"warnings":[]}
+    # Measure the actual encoded output with FFmpeg's EBU R128 implementation.
+    # No gain changes or additional lossy encoding are applied in this pass.
+    measurement=subprocess.run(["ffmpeg","-hide_banner","-nostats","-v","info","-i",str(temp),"-af","ebur128=peak=true:framelog=verbose","-f","null","-"],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+    import re
+    summary=measurement.stderr.rsplit("Summary:",1)[-1]
+    def metric(pattern):
+        match=re.search(pattern,summary)
+        if not match:return None
+        value=float(match.group(1))
+        return value if math.isfinite(value) else None
+    quality["loudness"]={"method":"FFmpeg EBU R128 decoded output","integrated_lufs":metric(r"I:\s*(-?\d+(?:\.\d+)?)\s*LUFS"),"range_lu":metric(r"LRA:\s*(-?\d+(?:\.\d+)?)\s*LU"),"true_peak_dbtp":metric(r"Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS"),"status":"measured" if measurement.returncode==0 else "unavailable"}
+    if measurement.returncode!=0 or quality["loudness"]["integrated_lufs"] is None or quality["loudness"]["true_peak_dbtp"] is None:
+        quality["loudness"]["status"]="unavailable"
+        quality["warnings"].append("Integrated loudness or true peak could not be measured.")
+    elif quality["loudness"]["true_peak_dbtp"]>-1:
+        quality["warnings"].append("Decoded true peak exceeds -1 dBTP; review before publishing.")
     # Compare 12-second spectral-change sequences at least 24 seconds apart.
     # Centring each band reduces false matches from constant instrumentation.
     # Report a heuristic signal only; repeating nature, chords and timbre can be intentional.
