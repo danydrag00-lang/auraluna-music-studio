@@ -209,5 +209,8 @@ for i in range(1,r["variations"]+1):
     for name in ("music."+r["format"],"licences.json","completed.json"):
         if not (source/name).is_file():raise RuntimeError("Missing production output: "+name)
         shutil.copy2(source/name,output/f"variation_{i}_{name}")
+    if extension_source is None:
+        for stem in source.glob("stem_*.flac"):
+            shutil.copy2(stem,output/f"variation_{i}_{stem.name}")
 print(f"PERF total engine execution: {time.monotonic()-started_job:.1f}s",flush=True)
 print("AURALUNA COMPLETE",flush=True)
