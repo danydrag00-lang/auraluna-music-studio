@@ -137,7 +137,8 @@ def font_render(name,ns):
         mid=Path(tmp)/"part.mid"; wav=Path(tmp)/"part.wav"
         m=pm.PrettyMIDI(); i=pm.Instrument(0);i.notes=ns;m.instruments.append(i);m.write(str(mid))
         with (out/(name+".log")).open("w") as log:
-            subprocess.run(["fluidsynth","-ni","-g","0.8","-r",str(SR),"-F",str(wav),str(font),str(mid)],stdout=log,stderr=subprocess.STDOUT,check=True)
+            subprocess.run(["fluidsynth","-ni","-g","0.8","-r",str(SR),"-O","s24","-T","wav","-F",str(wav),str(font),str(mid)],stdout=log,stderr=subprocess.STDOUT,check=True)
+        if sf.info(wav).subtype!="PCM_24":raise RuntimeError("SoundFont renderer did not produce 24-bit PCM")
         x,s=sf.read(wav,dtype="float32",always_2d=True)
         assert s==SR
         return np.pad(stereo(x[:frames]),((0,max(0,frames-len(x))),(0,0)))
@@ -148,6 +149,12 @@ def balance(x,db,cap=8):
 mix=np.zeros((frames,2),np.float32)
 levels={"felt_piano":-30,"grand_piano":-30,"flute":-36,"cello":-38,"harp":-37,"handpan":-31,"bansuri":-31,"singing_bowls":-39}
 report={}
+# Subtle gain-only placement keeps stereo recordings intact and avoids phase widening.
+positions={"felt_piano":0,"grand_piano":0,"flute":.17,"cello":-.16,"harp":.12,"handpan":-.08,"bansuri":.10,"singing_bowls":-.07}
+def place(x,name):
+    pan=positions[name]
+    x[:,0]*=math.sqrt(1-pan);x[:,1]*=math.sqrt(1+pan)
+    return x
 for name,ns in parts.items():
     if name in ("bansuri","singing_bowls"):
         path=next((root/"instruments"/name).rglob("*.wav"))
@@ -174,21 +181,21 @@ for name,ns in parts.items():
                 if fade:segment[-fade:]*=np.linspace(1,0,fade)[:,None]
                 x[start:start+len(segment)]+=segment
             report[name]=len(starts)
-        mix+=balance(x,levels[name])*10**(gains.get(name,0)/20)
+        mix+=place(balance(x,levels[name])*10**(gains.get(name,0)/20),name)
         continue
     if not ns:raise RuntimeError("No playable notes for selected instrument: "+name)
     x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
     x=balance(x,levels[name])*10**(gains.get(name,0)/20)
-    pan={"flute":.18,"cello":-.18,"harp":.12}.get(name,0)
-    x[:,0]*=1-pan;x[:,1]*=1+pan
-    mix+=x
+    mix+=place(x,name)
     report[name]=len(ns)
 # Light synthetic room impulse, applied only as an effect to real samples.
 ir_t=np.arange(SR*2)/SR
-ir=rng.normal(size=(len(ir_t),2))*np.exp(-ir_t/0.35)[:,None]
+room_rng=np.random.default_rng(20261127)
+ir=room_rng.normal(size=(len(ir_t),2))*np.exp(-ir_t/(.45 if a.mood=="deep_sleep" else .35))[:,None]
+ir[:int(.018*SR)]=0
 ir=sosfilt(butter(2,4200,fs=SR,output="sos"),ir,axis=0)
 ir/=np.sqrt(np.sum(ir*ir,axis=0))
-for c in range(2):mix[:,c]+=.12*fftconvolve(mix[:,c],ir[:,c],mode="full")[:frames]
+for c in range(2):mix[:,c]+=.09*fftconvolve(mix[:,c],ir[:,c].astype(np.float32),mode="full")[:frames]
 mix=sosfilt(butter(2,25,fs=SR,btype="highpass",output="sos"),mix,axis=0).astype(np.float32)
 mix=balance(mix,-30 if a.mood=="deep_sleep" else -28,4)
 if a.nature!="none":
