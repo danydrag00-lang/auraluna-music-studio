@@ -45,7 +45,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":2,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":3,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -114,6 +114,7 @@ for v in range(1,a.variations+1):
             for d in ("models","instruments","nature","licenses"):
                 (isolated/d).symlink_to(ROOT/d,target_is_directory=True)
             env=dict(os.environ,AURALUNA_ROOT=str(isolated),AURALUNA_TONIC=str([48,50,53,55,57][int(hashlib.sha256((job_id+str(v)).encode()).hexdigest(),16)%5]))
+            env.update(AURALUNA_SECTION=str(i),AURALUNA_SECTIONS=str(count),AURALUNA_MOTIF_SEED=str(int(hashlib.sha256((job_id+":"+str(v)).encode()).hexdigest()[:16],16)))
             for attempt in range(3):
                 try:
                     run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds),"--midi-only","--engine",a.engine],folder/"compose.log",env)
