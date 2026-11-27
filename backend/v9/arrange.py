@@ -197,7 +197,7 @@ threshold=.7*ceiling
 absx=np.abs(mix)
 mix=np.sign(mix)*np.where(absx>threshold,threshold+(ceiling-threshold)*np.tanh((absx-threshold)/(ceiling-threshold)),absx)
 assert np.isfinite(mix).all()
-sf.write(out/"ensemble.flac",mix,SR,subtype="PCM_24")
+sf.write(out/"ensemble.flac",mix,SR,subtype="PCM_16" if a.section else "PCM_24")
 if not a.section:
     subprocess.run(["ffmpeg","-y","-loglevel","error","-i",str(out/"ensemble.flac"),"-b:a","320k",str(out/"ensemble.mp3")],check=True)
 arr=pm.PrettyMIDI()
@@ -211,5 +211,5 @@ for p in (root/"licenses").glob("*.json"):
     if p.stem in report or d.get("category","").removeprefix("instruments/") in report or (a.nature!="none" and d.get("category")=="nature/"+a.nature):licences.append(d)
 (out/"licences.json").write_text(json.dumps(licences,indent=2))
 (out/"report.json").write_text(json.dumps({"source":str(src),"seconds":a.seconds,"notes":report,"nature":a.nature,"rms_dbfs":20*np.log10(max(1e-12,float(np.sqrt(np.mean(mix*mix))))),"peak_dbfs":20*np.log10(max(1e-12,float(np.max(np.abs(mix))))),"tuning":"VSCO sustained samples assumed +12 semitones from prior audit; verify current library","licence_note":"Source records only; review attribution and model output rights."},indent=2))
-print("ENSEMBLE READY:",out/"ensemble.mp3")
+print("ENSEMBLE READY:",out/("ensemble.flac" if a.section else "ensemble.mp3"))
 print((out/"report.json").read_text())
