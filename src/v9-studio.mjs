@@ -33,7 +33,7 @@ function newJob(){$('job').value='v9'+Date.now().toString(36)+Math.random().toSt
 function applyPreset(){const [,selected,nature]=presets[$('preset').value];for(const [key,c] of Object.entries(controls)){c.check.checked=selected.includes(key);c.slider.value=0;} for(const [name,c] of Object.entries(natureControls)){c.check.checked=name===nature;c.slider.value=0;}refresh()}
 function buildRequest(){
  const infer=$('mode').value==='prompt', prompt=$('prompt').value.trim();
- const data={engine:$('composition-engine').value,composition:$('composition-style').value,job:$('job').value.trim(),prompt,variations:Number($('variations').value),format:$('format').value};
+ const data={tuning:$('tuning').value,engine:$('composition-engine').value,composition:$('composition-style').value,job:$('job').value.trim(),prompt,variations:Number($('variations').value),format:$('format').value};
  if(!/^[A-Za-z0-9]{1,48}$/.test(data.job))throw Error('Use a job ID containing only letters and numbers.');
  {data.seconds=Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>3600)throw Error('Choose a duration between 15 seconds and 60 minutes.');}
  if(infer){if(!prompt)throw Error('Describe your music first.');}
@@ -51,7 +51,7 @@ function estimate(r){
  const natureOnly=Array.isArray(r.instruments)&&!r.instruments.length&&r.nature!=="none";
  const mode=natureOnly?"nature":r.engine;
  const count=Array.isArray(r.instruments)?r.instruments.length:null;
- const signature=[mode,mode==="fast"?r.composition||"independent":"",count===null?"prompt":r.instruments.slice().sort().join(","),r.format,r.nature_layers?Object.keys(r.nature_layers).sort().join(","):r.nature||"inferred"].join("|");
+ const signature=[mode,r.tuning||"standard",mode==="fast"?r.composition||"independent":"",count===null?"prompt":r.instruments.slice().sort().join(","),r.format,r.nature_layers?Object.keys(r.nature_layers).sort().join(","):r.nature||"inferred"].join("|");
  const minutes=r.seconds*r.variations/60;
  // Broad planning assumptions, not measured CPU benchmarks.
  const base=mode==="nature"?[2,.12,6,.7]:mode==="fast"?[2,.6,8,2.5]:[4,3,10,7];
@@ -69,6 +69,7 @@ function estimateLabel(e){return e?e.low+"–"+e.high+" min":"—"}
 function refresh(){
  const infer=$('mode').value==='prompt';$('mix-section').hidden=infer;$('preset').disabled=infer;$('infer-duration-row').hidden=true;$('duration').disabled=false;
  const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&Object.keys(chosenNature()).length>0;const fast=$('composition-engine').value==='fast';
+ $('tuning-row').hidden=natureOnly;$('tuning').disabled=natureOnly;if(natureOnly)$('tuning').value='standard';
  $('composition-style-row').hidden=natureOnly||!fast;$('composition-style').disabled=natureOnly||!fast;
  $('duration').max=natureOnly||fast?60:15;
  $('compute-plan').textContent=natureOnly||fast?'CPU · no GPU requested':'GPU · Aria neural composition';
@@ -152,7 +153,7 @@ async function connect(value,remember){
   let backendVersion="";try{const health=await fetch(API+"/health",{cache:"no-store"});if(health.ok)backendVersion=(await health.json()).version||""}catch{}
   if(version!==connectionVersion)return;
   deployedVersion=backendVersion;
-  status(backendVersion==="V16-nature-mixer"?"Connected · V16 nature mixer":backendVersion==="V15-composition-styles"?"Connected · V15 composition styles":backendVersion==="V14-cpu-routing"?"Connected · V14 · update Worker for composition styles":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
+  status(backendVersion==="V17-tuning"?"Connected · V17 custom tuning":backendVersion==="V16-nature-mixer"?"Connected · V16 nature mixer":backendVersion==="V15-composition-styles"?"Connected · V15 composition styles":backendVersion==="V14-cpu-routing"?"Connected · V14 · update Worker for composition styles":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
   const latest=history().find(x=>x.state&&!terminalStates.has(x.state))||history()[0];if(latest){if(latest.state&&!terminalStates.has(latest.state)){pendingSlug=latest.slug;lock()}await watch(latest.slug)}
  }catch(e){if(version!==connectionVersion)return;key="";if(e.status===401||e.status===403)forgetKey();$("credentials").hidden=false;status(e.message)}
  finally{if(version===connectionVersion)$("connect").disabled=false}
@@ -230,6 +231,7 @@ function addReports(slug,files){
      field("Average level (RMS)",number(q.rms_dbfs," dBFS"));field("Sample peak",number(q.sample_peak_dbfs," dBFS"));
      field("Longest very quiet passage",number(q.longest_very_quiet_seconds," s"));
      if(q.composition_analysis){field("Musical sections",q.composition_analysis.sections);field("Highest MIDI similarity",Number.isFinite(q.composition_analysis.max_similarity)?(100*q.composition_analysis.max_similarity).toFixed(1)+"%":"Insufficient comparison data");}
+     if(q.tuning){field("Tuning",q.tuning.mode==="a432"?"A4 = 432 Hz":q.tuning.mode==="c528"?"C5 = 528 Hz":"Standard pitch");field("Nominal A4",number(q.tuning.nominal_a4_hz," Hz"));field("Nominal C5",number(q.tuning.nominal_c5_hz," Hz"));}
      for(const [name,gain] of Object.entries(q.nature_layers_db||{}))field((natureNames[name]||name)+" · relative gain",gain+" dB");
      if(q.audio_repetition){const ar=q.audio_repetition;field("Audio repetition candidates",ar.comparisons?ar.candidate_matches:"Insufficient comparison data");field("Highest audio pattern similarity",Number.isFinite(ar.max_similarity)?(100*ar.max_similarity).toFixed(1)+"%":"Not recorded");for(const match of (ar.examples||[]).slice(0,5))field("Listen and compare",durationLabel(match.first_seconds===0?0.001:match.first_seconds)+" / "+durationLabel(match.second_seconds)+" · "+(100*match.similarity).toFixed(1)+"% similarity");}
      for(const [instrument,count] of Object.entries(q.instrument_coverage||{}))field((instruments[instrument]||instrument)+" · sections rendered",count);
@@ -314,7 +316,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");if(data.nature_layers&&deployedVersion!=="V16-nature-mixer"&&(Object.keys(data.nature_layers).length>1||Object.values(data.nature_layers).some(v=>v!==0)))throw Error("Deploy V16 Worker to use multiple nature layers or adjust their gains.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,natureLayers:d.natureLayers||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");if(data.nature_layers&&!["V16-nature-mixer","V17-tuning"].includes(deployedVersion)&&(Object.keys(data.nature_layers).length>1||Object.values(data.nature_layers).some(v=>v!==0)))throw Error("Deploy V16 Worker to use multiple nature layers or adjust their gains.");if(data.tuning!=="standard"&&deployedVersion!=="V17-tuning")throw Error("Deploy V17 Worker to enable custom instrument tuning.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,natureLayers:d.natureLayers||null,tuning:d.tuning||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
