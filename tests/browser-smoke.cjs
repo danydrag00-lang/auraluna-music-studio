@@ -17,10 +17,12 @@ function fixtureWav(seconds=60){
   res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream');fs.createReadStream(file).pipe(res)
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- let browser;
+ let browser,page,stage='launch';
  try{
   browser=await chromium.launch({headless:true,args:['--autoplay-policy=no-user-gesture-required']});
-  const page=await browser.newPage(),errors=[],requests=[];
+  page=await browser.newPage();const errors=[],requests=[];
+  page.on('console',m=>{if(m.type()==='error')console.error('BROWSER CONSOLE',m.text())});
+  page.on('requestfailed',r=>console.error('REQUEST FAILED',r.url(),r.failure()?.errorText));
   page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message)});
   const slug='auraluna-'+'a'.repeat(32),wave=fixtureWav();
   const files=[1,2,3].flatMap(v=>['music.wav','completed.json','licences.json'].map(name=>({name:'results/variation_'+v+'_'+name})));
@@ -29,7 +31,7 @@ function fixtureWav(seconds=60){
    const headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type','access-control-allow-methods':'GET, POST, OPTIONS'};
    const json=data=>route.fulfill({status:200,headers,contentType:'application/json',body:JSON.stringify(data)});
    if(req.method()==='OPTIONS')return route.fulfill({status:204,headers});
-   if(u.pathname==='/health')return json({version:'V28-instrument-regeneration',configured:true,cpuRouting:true});
+   if(u.pathname==='/health')return json({version:'V29-long-join',configured:true,cpuRouting:true});
    assert.equal(req.headers().authorization,'Bearer smoke-test-only');
    if(u.pathname==='/test-kaggle')return json({ok:true});
    if(u.pathname==='/generate'){requests.push(req.postDataJSON());return json({slug,compute:'CPU',seed:'SmokeSeed',seedVariation:1,composition:'thematic',aacMode:'premium',tuning:'standard'});}
@@ -38,30 +40,30 @@ function fixtureWav(seconds=60){
    if(u.pathname==='/file'&&u.searchParams.get('file')?.endsWith('.wav'))return route.fulfill({status:200,headers,contentType:'audio/wav',body:wave});
    return route.fulfill({status:404,headers,body:'Unexpected mocked endpoint: '+u.pathname});
   });
-  await page.goto('http://127.0.0.1:'+server.address().port+'/');
+  stage='load homepage';await page.goto('http://127.0.0.1:'+server.address().port+'/');
   assert.match(await page.title(),/Auraluna Music Studio/);
   assert.equal(await page.locator('#generate').isDisabled(),true);
-  await page.fill('#access-key','smoke-test-only');await page.click('#connect');
+  stage='connect mocked backend';await page.fill('#access-key','smoke-test-only');await page.click('#connect');
   await page.locator('#generate:enabled').waitFor();
-  await page.selectOption('#mode','manual');
+  stage='configure studio';await page.selectOption('#mode','manual');
   await page.selectOption('#preset','peaceful_piano');
   await page.selectOption('#composition-engine','studio');
   await page.selectOption('#composition-style','thematic');
   await page.selectOption('#format','wav');
   await page.fill('#duration','1');
-  await page.click('#preview');
+  stage='submit preview';await page.click('#preview');
   await page.waitForFunction(()=>document.querySelectorAll('#players audio').length===3,{},{timeout:30000});
   await page.locator('#generate:enabled').waitFor();
   assert.equal(requests.length,1);
   assert.equal(requests[0].engine,'studio');assert.equal(requests[0].seconds,60);assert.equal(requests[0].variations,3);assert.equal(requests[0].composition,'thematic');
-  await page.getByRole('button',{name:'Load audio',exact:true}).first().click();
+  stage='decode preview';await page.getByRole('button',{name:'Load audio',exact:true}).first().click();
   await page.waitForFunction(()=>{const a=document.querySelector('#players audio');return a&&!a.hidden&&a.readyState>=1});
   const metrics=await page.locator('#players audio').first().evaluate(async a=>{const ctx=new AudioContext();try{const b=await ctx.decodeAudioData(await(await fetch(a.src)).arrayBuffer());let peak=0,sum=0,n=0;for(const x of b.getChannelData(0)){peak=Math.max(peak,Math.abs(x));sum+=x*x;n++;}return {duration:b.duration,peak,rms:Math.sqrt(sum/n)}}finally{await ctx.close()}});
   assert.ok(Math.abs(metrics.duration-60)<.01);assert.ok(metrics.peak>.001&&metrics.peak<.99);assert.ok(metrics.rms>.0001);
   await page.waitForFunction(()=>document.querySelector('#players .v9-waveform input:not(:disabled)'));
-  await page.getByRole('button',{name:'Save audio locally',exact:true}).first().click();
+  stage='archive preview';await page.getByRole('button',{name:'Save audio locally',exact:true}).first().click();
   await page.waitForFunction(()=>document.querySelector('#archive-list').textContent.includes('variation_1_music.wav'));
   assert.equal(errors.length,0,errors.join('; '));
   console.log('Cloud studio smoke test passed with mocked API and deterministic WAV fixture',metrics);
- }finally{await browser?.close();server.close();}
+ }catch(e){console.error('FAILED STAGE:',stage);if(page){try{console.error('STUDIO STATE:',await page.evaluate(()=>Object.fromEntries(['cloud-status','production-status','generate','preview','archive-list','archive-status'].map(id=>{const x=document.getElementById(id);return [id,x?{text:x.textContent,disabled:x.disabled,hidden:x.hidden}:null]}))))}catch{}}throw e;}finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
