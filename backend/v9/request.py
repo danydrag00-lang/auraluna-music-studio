@@ -71,9 +71,11 @@ def normalize(r):
     aac_mode=r.get("aac_mode","premium")
     if aac_mode not in ("premium","vbr","balanced"):raise ValueError("Invalid AAC quality mode")
     if fmt!="m4a":aac_mode="premium"
-    return dict(aac_mode=aac_mode,tuning=tuning,composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,nature_layers=layers,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
+    seed=r.get("seed","")
+    if not isinstance(seed,str) or (seed and (engine!="fast" or not instruments or not re.fullmatch(r"[A-Za-z0-9]{1,48}",seed))):raise ValueError("Seed requires Fast Acoustic instruments and 1–48 ASCII letters or digits")
+    return dict(seed=seed,aac_mode=aac_mode,tuning=tuning,composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,nature_layers=layers,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
 def command(r,budget):
-    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--nature-layers",json.dumps(r["nature_layers"],separators=(",",":")),"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent"),"--tuning",r.get("tuning","standard"),"--aac-mode",r.get("aac_mode","premium")]
+    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--nature-layers",json.dumps(r["nature_layers"],separators=(",",":")),"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent"),"--tuning",r.get("tuning","standard"),"--aac-mode",r.get("aac_mode","premium"),"--seed",r.get("seed","")]
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("request",type=Path)
