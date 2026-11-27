@@ -32,7 +32,7 @@ p.add_argument("--engine",choices=["aria","fast"],default="aria")
 p.add_argument("--seconds",type=int,default=120)
 p.add_argument("--job",default=None)
 p.add_argument("--max-sections",type=int,default=2)
-p.add_argument("--aac-mode",choices=["premium","vbr"],default="premium")
+p.add_argument("--aac-mode",choices=["premium","vbr","balanced"],default="premium")
 p.add_argument("--format",choices=["mp3","m4a","flac","wav"],default="mp3")
 p.add_argument("--variations",type=int,choices=[1,2,3],default=1)
 p.add_argument("--gains",default="{}")
@@ -49,7 +49,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":14,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":15,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -74,7 +74,7 @@ if pitch_ratio!=1:
     if "rubberband" not in filters:raise RuntimeError("High-quality pitch-shifting filter unavailable; no lower-quality fallback used")
 import shutil
 # Conservative disk budget: uncompressed 24-bit checkpoints plus final output, with 512 MiB scratch allowance.
-bytes_per_second={"mp3":40000,"m4a":50000 if a.aac_mode=="vbr" else 33000,"flac":288000,"wav":288000}[a.format]
+bytes_per_second={"mp3":40000,"m4a":50000 if a.aac_mode=="vbr" else 25000 if a.aac_mode=="balanced" else 33000,"flac":288000,"wav":288000}[a.format]
 if a.format=="wav" and a.seconds*288000>=2**32-65536:p.error("WAV exceeds RIFF size limit; choose FLAC or MP3")
 existing=sum(x.stat().st_size for x in job.rglob("*") if x.is_file())
 required=max(0,a.variations*a.seconds*(bytes_per_second+(310000 if mood else 0))-existing)+512*1024**2
@@ -199,7 +199,7 @@ for v in range(1,a.variations+1):
     intermediate=folder/"master.part.flac"
     temp=folder/("music.part."+a.format)
     # Stream straight to final encoder instead of retaining a full extra master.
-    codec=["-b:a","320k"] if a.format=="mp3" else (["-c:a","aac","-profile:a","aac_low","-aac_coder","twoloop"]+(["-q:a","1.5"] if a.aac_mode=="vbr" else ["-b:a","256k"])+["-movflags","+faststart"]) if a.format=="m4a" else ["-c:a","pcm_s24le"] if a.format=="wav" else ["-c:a","flac","-sample_fmt","s32","-bits_per_raw_sample","24"]
+    codec=["-b:a","320k"] if a.format=="mp3" else (["-c:a","aac","-profile:a","aac_low","-aac_coder","twoloop"]+(["-q:a","1.5"] if a.aac_mode=="vbr" else ["-b:a","192k" if a.aac_mode=="balanced" else "256k"])+["-movflags","+faststart"]) if a.format=="m4a" else ["-c:a","pcm_s24le"] if a.format=="wav" else ["-c:a","flac","-sample_fmt","s32","-bits_per_raw_sample","24"]
     from contextlib import contextmanager
     @contextmanager
     def encoder():
@@ -337,7 +337,7 @@ for v in range(1,a.variations+1):
     quality["instrument_coverage"]={name:sum(int(x.get("instrument_events",{}).get(name,0)>0) for k,x in state["sections"].items() if k.startswith(f"{v}:")) for name in (instruments.split(",") if instruments else [])}
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
     quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
-    quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":256 if a.format=="m4a" and a.aac_mode=="premium" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
+    quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":(192 if a.aac_mode=="balanced" else 256) if a.format=="m4a" and a.aac_mode!="vbr" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
     quality["nature_layers_db"]=layers
     quality["nature_mix_normalization"]=layer_scale
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
