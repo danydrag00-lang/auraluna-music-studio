@@ -70,7 +70,8 @@ required=max(0,a.variations*a.seconds*(bytes_per_second+(210000 if mood else 0))
 if shutil.disk_usage(job).free<required:raise RuntimeError("Insufficient estimated free disk; choose shorter duration, fewer variations or MP3")
 overlap=4*SR
 # Equal-size 15–60 second source sections; no final tiny section.
-count=max(1,math.ceil((a.seconds-4)/56)) if mood else 0
+section_limit=120 if a.engine=="fast" else 60
+count=max(1,math.ceil((a.seconds-4)/(section_limit-4))) if mood else 0
 section_seconds=max(15,math.ceil((a.seconds+4*max(0,count-1))/max(1,count)))
 def run(cmd,log,env=None):
     started=time.monotonic()
@@ -127,8 +128,8 @@ for v in range(1,a.variations+1):
                     if not valid(source,section_seconds*SR):raise RuntimeError("Invalid section")
                     import shutil
                     temp=dest.with_suffix(".part")
-                    audio,rate=sf.read(source,dtype="float32",always_2d=True)
-                    sf.write(temp,audio,rate,format="FLAC",subtype="PCM_16");os.replace(temp,dest)
+                    # Section renderer already writes lossless PCM16 checkpoints.
+                    shutil.move(str(source),str(temp));os.replace(temp,dest)
                     shutil.copy2(midi,folder/f"section_{i:04d}.mid")
                     state["sections"][key]={"signature":signature,"file":str(dest.relative_to(job))}
                     save();break
