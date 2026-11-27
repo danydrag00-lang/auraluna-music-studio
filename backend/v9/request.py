@@ -62,7 +62,7 @@ def normalize(r):
     gains=r.get("gains",{})
     if not isinstance(gains,dict) or any(k not in instruments or type(v) not in (int,float) or not math.isfinite(v) or not -60<=v<=12 for k,v in gains.items()):raise ValueError("Invalid gain offsets")
     engine=r.get("engine","aria")
-    if engine not in ("aria","fast"):raise ValueError("Invalid composition engine")
+    if engine not in ("aria","fast","studio"):raise ValueError("Invalid composition engine")
     composition=r.get("composition","independent")
     if composition not in ("independent","thematic"):raise ValueError("Invalid composition style")
     tuning=r.get("tuning","standard")
@@ -72,7 +72,7 @@ def normalize(r):
     if aac_mode not in ("premium","vbr","balanced"):raise ValueError("Invalid AAC quality mode")
     if fmt!="m4a":aac_mode="premium"
     seed=r.get("seed","")
-    if not isinstance(seed,str) or (seed and (engine!="fast" or not instruments or not re.fullmatch(r"[A-Za-z0-9]{1,48}",seed))):raise ValueError("Seed requires Fast Acoustic instruments and 1–48 ASCII letters or digits")
+    if not isinstance(seed,str) or (seed and (engine not in ("fast","studio") or not instruments or not re.fullmatch(r"[A-Za-z0-9]{1,48}",seed))):raise ValueError("Seed requires Fast Acoustic instruments and 1–48 ASCII letters or digits")
     seed_variation=integer("seed_variation",r.get("seed_variation",1),1,3)
     if seed_variation!=1 and (not seed or variations!=1):raise ValueError("Selected seed variation requires one output and a fixed seed")
     mastering=r.get("mastering","original")
