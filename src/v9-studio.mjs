@@ -31,14 +31,15 @@ function chosenNature(){return Object.fromEntries(Object.entries(natureControls)
 let deployedVersion="";
 function newJob(){$('job').value='v9'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function applyPreset(){const [,selected,nature]=presets[$('preset').value];for(const [key,c] of Object.entries(controls)){c.check.checked=selected.includes(key);c.slider.value=0;} for(const [name,c] of Object.entries(natureControls)){c.check.checked=name===nature;c.slider.value=0;}refresh()}
-function buildRequest(){
+function buildRequest(preview=false){
  const infer=$('mode').value==='prompt', prompt=$('prompt').value.trim();
  const data={aac_mode:$('format').value==='m4a'?$('aac-mode').value:'premium',tuning:$('tuning').value,engine:$('composition-engine').value,composition:$('composition-style').value,job:$('job').value.trim(),prompt,variations:Number($('variations').value),format:$('format').value};
  if(!/^[A-Za-z0-9]{1,48}$/.test(data.job))throw Error('Use a job ID containing only letters and numbers.');
- {data.seconds=Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>43200)throw Error('Choose a duration between 15 seconds and 12 hours.');}
+ {data.seconds=preview?60:Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>43200)throw Error('Choose a duration between 15 seconds and 12 hours.');}
  if(infer){if(!prompt)throw Error('Describe your music first.');}
  else{data.preset=$('preset').value;data.instruments=Object.keys(controls).filter(k=>controls[k].check.checked);data.nature_layers=chosenNature();data.nature=Object.keys(data.nature_layers)[0]||'none';data.gains=Object.fromEntries(data.instruments.map(k=>[k,Number(controls[k].slider.value)]));if(!data.instruments.length&&data.nature==='none')throw Error('Select at least one instrument or nature sound.');}
  const natureOnly=!infer&&data.instruments.length===0&&data.nature!=='none';
+ if(preview){data.seconds=60;data.variations=natureOnly?1:3;}
  const limit=natureOnly?43200:data.engine==='fast'?3600:900;
  if(data.seconds>limit)throw Error('Choose up to '+limit/60+' minutes for this mode.');
  if(![1,2,3].includes(data.variations)||natureOnly&&data.variations!==1)throw Error('Choose a valid variation count.');
@@ -88,7 +89,7 @@ let key="",busy=false,timer=null,active="",attempt=0;
 const historyKey="auraluna-v9-jobs";
 function history(){try{return JSON.parse(localStorage.getItem(historyKey)||"[]").filter(x=>/^auraluna-[a-f0-9]{32}$/.test(x.slug))}catch{return []}}
 let pendingMeta=null, pendingSlug="", submitting=false;
-function lock(){busy=true;$("generate").disabled=true;$("generate").textContent=submitting?"Submitting production…":"Production in progress"}
+function lock(){busy=true;$("preview").disabled=true;$("generate").disabled=true;$("generate").textContent=submitting?"Submitting production…":"Production in progress"}
 document.addEventListener("visibilitychange",()=>{if(document.hidden)continuousObservation=false});
 let selectedEnd=0,clockRunning=false,selectedEstimate=null,continuousObservation=false,submittingSlugExpected=false;
 function durationLabel(seconds){if(!Number.isFinite(seconds)||seconds<=0)return "Not recorded";const n=Math.round(seconds);return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
@@ -156,7 +157,7 @@ async function api(path,options={}){
  const d=await r.json();if(!r.ok){const e=new Error(d.error||"Backend HTTP "+r.status);e.status=r.status;throw e;}return d;
 }
 function status(s){$("cloud-status").textContent=s}
-function unlock(){if(submitting||pendingSlug){lock();return}busy=false;$("generate").disabled=!key;$("generate").textContent="Generate Music"}
+function unlock(){if(submitting||pendingSlug){lock();return}busy=false;$("preview").disabled=!key;$("generate").disabled=!key;$("generate").textContent="Generate Music"}
 function release(slug){if(pendingSlug===slug)pendingSlug="";unlock()}
 const keyStorage="auraluna-v9-device-access";
 function forgetKey(){try{localStorage.removeItem(keyStorage)}catch{}}
@@ -315,7 +316,7 @@ async function poll(slug,version=monitorVersion){
    for(const f of audio){if(version!==monitorVersion)return;await addFile(slug,f.name)}
    if(version!==monitorVersion)return;
    if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);
-   showProgress("Production completed. Your audio is below.");release(slug);renderHistory();return
+   showProgress(saved?.preview?"Preview completed. Audition the variations below. Full production will create a new composition, not extend this exact preview.":"Production completed. Your audio is below.");release(slug);renderHistory();return
   }
   unknownChecks=0;
   if(["ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED"].includes(state)){
@@ -340,7 +341,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");if(data.nature_layers&&!["V16-nature-mixer","V17-tuning","V18-long-nature","V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion)&&(Object.keys(data.nature_layers).length>1||Object.values(data.nature_layers).some(v=>v!==0)))throw Error("Deploy V16 Worker to use multiple nature layers or adjust their gains.");if(data.tuning!=="standard"&&!["V17-tuning","V18-long-nature","V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V17 Worker to enable custom instrument tuning.");if(data.seconds>3600&&!["V18-long-nature","V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V18 Worker to enable extended nature duration.");if(data.format==="m4a"&&!["V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V19 Worker to enable YouTube Ready AAC.");if(data.aac_mode==="vbr"&&!["V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V20 Worker to enable AAC VBR.");if(data.aac_mode==="balanced"&&deployedVersion!=="V21-aac-balanced")throw Error("Deploy V21 Worker to enable balanced AAC.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,natureLayers:d.natureLayers||null,aacMode:d.aacMode||null,tuning:d.tuning||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const preview=e.submitter?.id==="preview";const data=buildRequest(preview);if(!key)throw Error("Connect first.");if(data.nature_layers&&!["V16-nature-mixer","V17-tuning","V18-long-nature","V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion)&&(Object.keys(data.nature_layers).length>1||Object.values(data.nature_layers).some(v=>v!==0)))throw Error("Deploy V16 Worker to use multiple nature layers or adjust their gains.");if(data.tuning!=="standard"&&!["V17-tuning","V18-long-nature","V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V17 Worker to enable custom instrument tuning.");if(data.seconds>3600&&!["V18-long-nature","V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V18 Worker to enable extended nature duration.");if(data.format==="m4a"&&!["V19-youtube-ready","V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V19 Worker to enable YouTube Ready AAC.");if(data.aac_mode==="vbr"&&!["V20-aac-vbr","V21-aac-balanced"].includes(deployedVersion))throw Error("Deploy V20 Worker to enable AAC VBR.");if(data.aac_mode==="balanced"&&deployedVersion!=="V21-aac-balanced")throw Error("Deploy V21 Worker to enable balanced AAC.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:(preview?"Preview · ":"")+(data.preset?presets[data.preset][0]:"Custom music"),date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,natureLayers:d.natureLayers||null,aacMode:d.aacMode||null,tuning:d.tuning||null,compute:d.compute||null,variations:data.variations,preview,requestSettings:data,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
