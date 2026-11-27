@@ -219,15 +219,16 @@ async function poll(slug,version=monitorVersion){
   const uncertain=["UNKNOWN","UNSPECIFIED","UNDEFINED","NULL","0","STATUS_UNSPECIFIED"].includes(state);
   if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)||uncertain||state==="RUNNING"){
    if(state!=="RUNNING")showProgress(uncertain?"Checking for saved audio…":"Production complete. Preparing audio…",true);
-   const out=await api("/outputs?slug="+encodeURIComponent(slug));
+   let out;
+   try{out=await api("/outputs?slug="+encodeURIComponent(slug))}catch(e){if(state==="RUNNING"){showProgress("Creating your music… Waiting for validated outputs.",true);next=15000;return}throw e}
    if(version!==monitorVersion)return;
-   const files=out.files||[],audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name));
+   const files=out.files||[],names=new Set(files.map(f=>f.name)),audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name)&&names.has(f.name.replace(/music\.(mp3|wav|flac)$/i,"completed.json"))&&names.has(f.name.replace(/music\.(mp3|wav|flac)$/i,"licences.json")));
    if(state==="RUNNING"&&audio.length<(history().find(x=>x.slug===slug)?.variations||1)){showProgress("Creating your music…",true);next=15000;return}
    $("players").replaceChildren();
    const expected=history().find(x=>x.slug===slug)?.variations||1;
    if(audio.length<expected){
-    if(uncertain){unknownChecks++;showProgress("Kaggle has not confirmed the production status. No audio found."+(unknownChecks<4?" Checking again automatically.":" Open Production details to verify the job; do not submit a duplicate."),false);if(unknownChecks<4)next=30000;return}
-    showProgress("Completed, but no audio is available yet.");next=20000;return
+    if(uncertain){unknownChecks++;showProgress("Kaggle has not confirmed the production status. No complete audio and report set found."+(unknownChecks<4?" Checking again automatically.":" Open Production details to verify the job; do not submit a duplicate."),false);if(unknownChecks<4)next=30000;return}
+    showProgress("Waiting for all audio files and completion reports.");next=20000;return
    }
    clockRunning=false;selectedEnd=selectedEnd||Date.now();const saved=history().find(x=>x.slug===slug);const measuredSeconds=(selectedEnd-selectedStarted)/1000;updateSaved(slug,{state:"COMPLETE",observedEnd:selectedEnd,...(continuousObservation&&saved?.estimateSignature&&measuredSeconds>0?{measuredSeconds,timingReliable:true}:{})});updateClock();refresh();
    for(const f of audio){if(version!==monitorVersion)return;await addFile(slug,f.name)}
