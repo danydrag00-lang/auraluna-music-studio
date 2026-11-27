@@ -16,7 +16,7 @@ function validate(r){
  if(r.gains!==undefined){if(!r.gains||typeof r.gains!=="object"||Array.isArray(r.gains)||Object.entries(r.gains).some(([k,v])=>!out.instruments?.includes(k)||typeof v!=="number"||!Number.isFinite(v)||v< -60||v>12))throw Error("Invalid gains");out.gains=r.gains}
  if(r.nature_layers!==undefined){const l=r.nature_layers;if(!l||typeof l!=="object"||Array.isArray(l)||Object.entries(l).some(([k,v])=>!nature.includes(k)||k==="none"||typeof v!=="number"||!Number.isFinite(v)||v< -30||v>6))throw Error("Invalid nature mixer");out.nature_layers=l;out.nature=Object.keys(l)[0]||"none"}
  if(out.instruments?.length===0&&out.nature==="none")throw Error("Choose a sound source");
- if(!["premium","vbr"].includes(out.aac_mode))throw Error("Invalid AAC mode");
+ if(!["premium","vbr","balanced"].includes(out.aac_mode))throw Error("Invalid AAC mode");
  if(out.format!=="m4a")out.aac_mode="premium";
  if(!["standard","a432","c528"].includes(out.tuning))throw Error("Invalid tuning");
  if(!["independent","thematic"].includes(out.composition))throw Error("Invalid composition style");
@@ -66,7 +66,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V20-aac-vbr",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V21-aac-balanced",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
