@@ -11,10 +11,34 @@ scratch.mkdir(parents=True,exist_ok=True)
 root=scratch
 os.environ["AURALUNA_ROOT"]=str(root)
 root.mkdir(parents=True,exist_ok=True)
-archives=list(Path("/kaggle/input").rglob("Auraluna-V9-assets.tar"))
-if len(archives)!=1:raise RuntimeError("Attach exactly one Auraluna V9 assets archive")
-with tarfile.open(archives[0]) as t:
-    t.extractall(root,filter="data")
+inputs=Path("/kaggle/input")
+required=("instruments","nature","licenses","models/model.safetensors")
+def complete(p):
+    return all((p/name).exists() for name in required)
+def locate(base):
+    return sorted({p.parent.parent for p in base.rglob("model.safetensors") if p.parent.name=="models" and complete(p.parent.parent)})
+print("Dataset mount entries:",[str(p) for p in inputs.iterdir()] if inputs.exists() else [],flush=True)
+sources=locate(inputs)
+if len(sources)>1:raise RuntimeError("Multiple complete asset roots: "+str(sources))
+if not sources:
+    archives=sorted(p for p in inputs.rglob("*") if p.is_file() and p.name.lower().endswith((".tar",".tar.gz",".tgz",".tar.xz",".tar.bz2")) and "auraluna" in p.name.lower())
+    print("Asset archive candidates:",[str(p) for p in archives],flush=True)
+    if len(archives)!=1:
+        import itertools
+        print("Input sample:",[str(p) for p in itertools.islice(inputs.rglob("*"),40)],flush=True)
+        raise RuntimeError("No unique Auraluna archive or complete extracted asset root; verify dataset attachment and contents")
+    unpack=scratch/"unpacked"
+    unpack.mkdir(exist_ok=True)
+    with tarfile.open(archives[0],"r:*") as t:
+        t.extractall(unpack,filter="data")
+    sources=locate(unpack)
+    if len(sources)!=1:raise RuntimeError("Archive does not contain one complete asset root: "+str(sources))
+source=sources[0]
+print("Using asset root:",source,flush=True)
+for name in ("instruments","nature","licenses","models"):
+    target=root/name
+    if not target.exists():target.symlink_to(source/name,target_is_directory=True)
+
 for name in ("instruments","nature","licenses","models/model.safetensors"):
     if not (root/name).exists():raise RuntimeError("Asset missing: "+name)
 engine=Path(__file__).resolve().parent
