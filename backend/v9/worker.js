@@ -21,10 +21,10 @@ function validate(r){
  if(out.format!=="m4a")out.aac_mode="premium";
  if(!["standard","a432","c528"].includes(out.tuning))throw Error("Invalid tuning");
  if(!["independent","thematic"].includes(out.composition))throw Error("Invalid composition style");
- if(!["aria","fast"].includes(out.engine))throw Error("Invalid composition engine");
+ if(!["aria","fast","studio"].includes(out.engine))throw Error("Invalid composition engine");
  const natureOnly=Array.isArray(out.instruments)&&out.instruments.length===0&&nature.includes(out.nature)&&out.nature!=="none";
  if(out.seconds>900&&!natureOnly&&out.engine==="aria")throw Error("Aria supports up to 15 minutes.");
- if(typeof out.seed!=="string"||(out.seed&&(out.engine!=="fast"||natureOnly||!Array.isArray(out.instruments)||!out.instruments.length||!/^[A-Za-z0-9]{1,48}$/.test(out.seed))))throw Error("Seed requires manual Fast Acoustic instruments and 1–48 ASCII letters or digits");
+ if(typeof out.seed!=="string"||(out.seed&&(!["fast","studio"].includes(out.engine)||natureOnly||!Array.isArray(out.instruments)||!out.instruments.length||!/^[A-Za-z0-9]{1,48}$/.test(out.seed))))throw Error("Seed requires manual Fast Acoustic instruments and 1–48 ASCII letters or digits");
  if(!Number.isInteger(out.seed_variation)||out.seed_variation<1||out.seed_variation>3||(out.seed_variation!==1&&(!out.seed||out.variations!==1)))throw Error("Selected seed variation requires one output and a fixed seed");
  if(natureOnly&&out.tuning!=="standard")throw Error("Tuning requires instruments");
  if(natureOnly&&out.variations!==1)throw Error("Nature-only mode supports one variation.");
@@ -69,7 +69,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V24-mastering",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V25-studio-premium",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -101,7 +101,7 @@ export default {async fetch(req,env){
     // A script kernel keeps submitted source small; no credentials in notebook source.
     const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
-    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,seed:r.engine==="fast"?(r.seed||r.job):null,seedVariation:r.seed_variation,mastering:r.mastering,tuning:r.tuning,composition:r.engine==="fast"&&!natureOnly?r.composition:null},202);
+    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,aacMode:r.aac_mode,seed:["fast","studio"].includes(r.engine)?(r.seed||r.job):null,seedVariation:r.seed_variation,mastering:r.mastering,tuning:r.tuning,composition:["fast","studio"].includes(r.engine)&&!natureOnly?r.composition:null},202);
   }
   const slug=url.searchParams.get("slug")||"";
   if(!/^auraluna-[a-f0-9]{32}$/.test(slug))return reply({error:"Invalid production slug"},400);
