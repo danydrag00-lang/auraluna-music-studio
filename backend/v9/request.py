@@ -40,7 +40,11 @@ def normalize(r):
     if nature is None:
         nature=next((k for k in ("rain","river","ocean","forest") if re.search(r"\b"+k+r"\b",t)),ambient)
         if re.search(r"no (nature|ambience|ambient sounds)|without (nature|ambience|rain|river|ocean|forest)",t):nature="none"
-    if nature not in NATURE or not instruments and nature=="none":raise ValueError("Select a valid sound source")
+    if nature not in NATURE:raise ValueError("Invalid nature source")
+    layers=r.get("nature_layers",{nature:0} if nature!="none" else {})
+    if not isinstance(layers,dict) or any(k not in NATURE-{"none"} or type(v) not in (int,float) or not math.isfinite(v) or not -30<=v<=6 for k,v in layers.items()):raise ValueError("Invalid nature mixer")
+    nature=next(iter(layers),"none")
+    if not instruments and not layers:raise ValueError("Select a valid sound source")
     seconds=r.get("seconds")
     if seconds is None:
         m=re.search(r"(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b",t)
@@ -61,9 +65,9 @@ def normalize(r):
     if engine not in ("aria","fast"):raise ValueError("Invalid composition engine")
     composition=r.get("composition","independent")
     if composition not in ("independent","thematic"):raise ValueError("Invalid composition style")
-    return dict(composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
+    return dict(composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,nature_layers=layers,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
 def command(r,budget):
-    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent")]
+    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--nature-layers",json.dumps(r["nature_layers"],separators=(",",":")),"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent")]
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("request",type=Path)
