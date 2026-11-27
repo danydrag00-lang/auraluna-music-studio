@@ -46,7 +46,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":5,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":6,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -107,10 +107,10 @@ def get_loop():
     if s!=SR:
         g=math.gcd(s,SR);x=resample_poly(x,SR//g,s//g,axis=0)
     if x.shape[1]==1:x=np.repeat(x,2,axis=1)
-    x=x[:,:2];x-=x.mean(axis=0)
+    x=x[:,:2].copy();x-=x.mean(axis=0)
     n=min(3*SR,len(x)//4)
     if n<1:raise RuntimeError("Invalid ambience")
-    w=np.linspace(0,1,n,dtype=np.float32)[:,None]
+    w=(.5-.5*np.cos(np.linspace(0,np.pi,n,dtype=np.float32)))[:,None]
     x=np.concatenate([x[-n:]*(1-w)+x[:n]*w,x[n:-n]])
     rms=float(np.sqrt(np.mean(x*x)))
     if rms<1e-8 or not np.isfinite(rms):raise RuntimeError("Silent ambience")
@@ -195,7 +195,10 @@ for v in range(1,a.variations+1):
             x=x[:max(0,total-pos)].copy()
             if not len(x):return
             ix=np.arange(pos,pos+len(x))
-            if loop is not None:x+=loop[ix%len(loop)]
+            if loop is not None:
+                # Very gentle continuous ambience level evolution, not synthetic sound generation.
+                modulation=(1+.035*np.sin(2*np.pi*ix/(SR*97))).astype(np.float32)
+                x+=loop[ix%len(loop)]*modulation[:,None]
             fade=np.minimum(np.minimum(ix/(6*SR),(total-1-ix)/(8*SR)),1).clip(0,1)
             x*=fade[:,None]
             limit=10**(-8/20)
