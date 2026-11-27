@@ -14,6 +14,24 @@ root.mkdir(parents=True,exist_ok=True)
 from request import normalize,command
 raw=json.loads(a.request.read_text())
 r=normalize(raw)
+regen=raw.get("regenerate")
+regen_score=None
+if regen is not None:
+    import re
+    allowed={"felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls"}
+    if not isinstance(regen,dict) or not re.fullmatch(r"auraluna-[a-f0-9]{32}",str(regen.get("slug",""))) or type(regen.get("variation")) is not int or regen["variation"] not in (1,2,3) or regen.get("instrument") not in allowed or r["instruments"]!=[regen["instrument"]] or r["format"]!="flac" or r["variations"]!=1 or r["seconds"]>60 or r["tuning"]!="standard" or r["nature_layers"] or raw.get("extension") is not None:
+        raise ValueError("Invalid individual instrument regeneration request")
+    prefix=f"variation_{regen['variation']}_"
+    matches=[p for p in Path("/kaggle/input").rglob(prefix+"score.mid") if regen["slug"] in p.parts and p.is_file()]
+    if len(matches)!=1:raise RuntimeError("Original score unavailable; generate a new short production first")
+    regen_score=matches[0]
+    original_report=json.loads(regen_score.with_name(prefix+"completed.json").read_text())
+    original_licences=json.loads(regen_score.with_name(prefix+"licences.json").read_text())
+    if original_report.get("seconds")!=r["seconds"] or original_report.get("quality",{}).get("status") not in ("technical_checks_passed","stem_regeneration_verified"):raise RuntimeError("Original score duration or validation mismatch")
+    originals={name:regen_score.with_name(prefix+"stem_"+name+".flac") for name in allowed}
+    originals={k:v for k,v in originals.items() if v.is_file()}
+    if regen["instrument"] not in originals:raise RuntimeError("Selected original stem missing")
+    r["engine"]="fast"
 extension=raw.get("extension")
 extension_source=None
 if extension is not None:
@@ -122,7 +140,47 @@ print("Starting",r["job"],flush=True)
 job=root/"jobs"/r["job"]
 # Keep one model process alive across all production batches, not across users or jobs.
 # Private socket directory, with explicit cleanup even on a failed production.
-if nature_only:
+if regen_score is not None:
+    import numpy as np
+    import soundfile as sf
+    import hashlib
+    folder=job/"variation_1"
+    folder.mkdir(parents=True,exist_ok=True)
+    midi=folder/"section_0000.mid"
+    shutil.copy2(regen_score,midi)
+    target=regen["instrument"]
+    mood={"deep_sleep":"deep_sleep","peaceful_piano":"deep_sleep","luxury_spa":"luxury_spa"}.get(r["preset"],"meditation")
+    env=dict(os.environ,AURALUNA_STEMS="1",AURALUNA_PERFORMANCE_SEED=str(int.from_bytes(os.urandom(8),"big")),AURALUNA_REGENERATE="1")
+    subprocess.run([sys.executable,str(engine/"arrange.py"),"--root",str(root),"--midi",str(midi),"--mood",mood,"--seconds",str(r["seconds"]),"--instruments",target,"--nature","none","--section","--gains",json.dumps(r["gains"])],env=env,check=True)
+    new=folder/"ensemble"/("stem_"+target+".flac")
+    frames=r["seconds"]*48000
+    def validate_stem(p):
+        info=sf.info(p)
+        if info.frames!=frames or info.samplerate!=48000 or info.channels!=2 or info.subtype!="PCM_24":raise RuntimeError("Invalid stem: "+p.name)
+    def digest(p):
+        h=hashlib.sha256()
+        with p.open("rb") as reader:
+            for block in iter(lambda:reader.read(1024*1024),b""):h.update(block)
+        return h.hexdigest()
+    for name,src in originals.items():
+        dst=folder/("stem_"+name+".flac")
+        validate_stem(new if name==target else src)
+        shutil.copy2(new if name==target else src,dst)
+        if name!=target and digest(src)!=digest(dst):raise RuntimeError("Preserved stem changed")
+    if digest(new)==digest(originals[target]):raise RuntimeError("Regeneration produced identical stem; retry")
+    # Conservative dry audition mix. Original mastered production remains untouched.
+    mix=np.zeros((frames,2),np.float32)
+    for stem in sorted(folder.glob("stem_*.flac")):
+        samples,_=sf.read(stem,dtype="float32",always_2d=True)
+        if not np.isfinite(samples).all():raise RuntimeError("Invalid stem samples")
+        mix+=samples
+    peak=float(np.max(np.abs(mix)))
+    if peak<1e-5:raise RuntimeError("Silent regenerated mix")
+    mix*=min(1.,10**(-3/20)/peak)
+    sf.write(folder/"music.flac",mix,48000,subtype="PCM_24")
+    (folder/"licences.json").write_text(json.dumps(original_licences,indent=2))
+    (folder/"completed.json").write_text(json.dumps({"engine":"stem_regeneration","seconds":r["seconds"],"sample_rate":48000,"file":"music.flac","quality":{"status":"stem_regeneration_verified","decoded_seconds":r["seconds"],"sample_rate":48000,"channels":2,"warnings":["Dry audition mix; nature, shared room effects and original mastering are not included."]},"regeneration":{"instrument":target,"source_slug":regen["slug"],"source_variation":regen["variation"],"preserved_stems":sorted(k for k in originals if k!=target),"unchanged_stems_sha256_verified":True}},indent=2))
+elif nature_only:
     print("AURALUNA STAGE: mixing nature and encoding audio",flush=True)
     subprocess.run(command(r,12),check=True)
 elif fast:
@@ -212,5 +270,7 @@ for i in range(1,r["variations"]+1):
     if extension_source is None:
         for stem in source.glob("stem_*.flac"):
             shutil.copy2(stem,output/f"variation_{i}_{stem.name}")
+        if any(source.glob("stem_*.flac")) and (source/"section_0000.mid").is_file():
+            shutil.copy2(source/"section_0000.mid",output/f"variation_{i}_score.mid")
 print(f"PERF total engine execution: {time.monotonic()-started_job:.1f}s",flush=True)
 print("AURALUNA COMPLETE",flush=True)
