@@ -35,11 +35,11 @@ function buildRequest(){
  const infer=$('mode').value==='prompt', prompt=$('prompt').value.trim();
  const data={tuning:$('tuning').value,engine:$('composition-engine').value,composition:$('composition-style').value,job:$('job').value.trim(),prompt,variations:Number($('variations').value),format:$('format').value};
  if(!/^[A-Za-z0-9]{1,48}$/.test(data.job))throw Error('Use a job ID containing only letters and numbers.');
- {data.seconds=Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>3600)throw Error('Choose a duration between 15 seconds and 60 minutes.');}
+ {data.seconds=Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>43200)throw Error('Choose a duration between 15 seconds and 12 hours.');}
  if(infer){if(!prompt)throw Error('Describe your music first.');}
  else{data.preset=$('preset').value;data.instruments=Object.keys(controls).filter(k=>controls[k].check.checked);data.nature_layers=chosenNature();data.nature=Object.keys(data.nature_layers)[0]||'none';data.gains=Object.fromEntries(data.instruments.map(k=>[k,Number(controls[k].slider.value)]));if(!data.instruments.length&&data.nature==='none')throw Error('Select at least one instrument or nature sound.');}
  const natureOnly=!infer&&data.instruments.length===0&&data.nature!=='none';
- const limit=natureOnly||data.engine==='fast'?3600:900;
+ const limit=natureOnly?43200:data.engine==='fast'?3600:900;
  if(data.seconds>limit)throw Error('Choose up to '+limit/60+' minutes for this mode.');
  if(![1,2,3].includes(data.variations)||natureOnly&&data.variations!==1)throw Error('Choose a valid variation count.');
  if(data.seconds*data.variations>limit)throw Error('Combined duration must not exceed '+limit/60+' minutes.');
@@ -71,11 +71,11 @@ function refresh(){
  const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&Object.keys(chosenNature()).length>0;const fast=$('composition-engine').value==='fast';
  $('tuning-row').hidden=natureOnly;$('tuning').disabled=natureOnly;if(natureOnly)$('tuning').value='standard';
  $('composition-style-row').hidden=natureOnly||!fast;$('composition-style').disabled=natureOnly||!fast;
- $('duration').max=natureOnly||fast?60:15;
+ $('duration').max=natureOnly?720:fast?60:15;
  $('compute-plan').textContent=natureOnly||fast?'CPU · no GPU requested':'GPU · Aria neural composition';
  $('variations').disabled=natureOnly;
  if(natureOnly)$('variations').value='1';
- $('duration-limit').textContent=natureOnly?'Nature-only: up to 60 minutes.':fast?'Fast acoustic: up to 60 minutes combined across variations.':'Aria: up to 15 minutes combined across variations.';
+ $('duration-limit').textContent=natureOnly?'Nature-only: up to 12 hours (experimental beyond 60 minutes). Long MP3 files require direct download.':fast?'Fast acoustic: up to 60 minutes combined across variations.':'Aria: up to 15 minutes combined across variations.';
  for(const c of Object.values(natureControls)){c.slider.disabled=!c.check.checked;c.value.textContent=(Number(c.slider.value)>0?'+':'')+c.slider.value+' dB'}
  for(const c of Object.values(controls)){c.slider.disabled=!c.check.checked;c.value.textContent=(Number(c.slider.value)>0?'+':'')+c.slider.value+' dB'}
  try{const r=buildRequest();const e=estimate(r);$('estimate-time').textContent=estimateLabel(e);$('estimate-basis').textContent=e.source+' · Includes typical setup allowance; queue delays can extend it.';$('summary').textContent=(r.preset?presets[r.preset][0]:'Prompt-based configuration')+' · '+(r.seconds?r.seconds/60+' min':'duration inferred')+' · '+(r.engine==='fast'?'Fast acoustic · '+(r.composition==='thematic'?'Recurring theme':'Independent sections'):'Aria AI')+' · '+r.variations+' variation(s) · '+r.format.toUpperCase()+(r.instruments?' · '+r.instruments.map(k=>instruments[k]).join(', ')+' · '+(Object.keys(r.nature_layers||{}).map(k=>natureNames[k]).join(' + ')||'No nature ambience'):'');}
@@ -174,7 +174,7 @@ async function connect(value,remember){
   let backendVersion="";try{const health=await fetch(API+"/health",{cache:"no-store"});if(health.ok)backendVersion=(await health.json()).version||""}catch{}
   if(version!==connectionVersion)return;
   deployedVersion=backendVersion;
-  status(backendVersion==="V17-tuning"?"Connected · V17 custom tuning":backendVersion==="V16-nature-mixer"?"Connected · V16 nature mixer":backendVersion==="V15-composition-styles"?"Connected · V15 composition styles":backendVersion==="V14-cpu-routing"?"Connected · V14 · update Worker for composition styles":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
+  status(backendVersion==="V18-long-nature"?"Connected · V18 extended nature":backendVersion==="V17-tuning"?"Connected · V17 custom tuning":backendVersion==="V16-nature-mixer"?"Connected · V16 nature mixer":backendVersion==="V15-composition-styles"?"Connected · V15 composition styles":backendVersion==="V14-cpu-routing"?"Connected · V14 · update Worker for composition styles":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
   const latest=history().find(x=>x.state&&x.state!=="UNVERIFIED"&&!terminalStates.has(x.state))||history().find(x=>terminalStates.has(x.state));if(latest){if(latest.state&&!terminalStates.has(latest.state)){pendingSlug=latest.slug;lock()}await watch(latest.slug)}
  }catch(e){if(version!==connectionVersion)return;key="";if(e.status===401||e.status===403)forgetKey();$("credentials").hidden=false;status(e.message)}
  finally{if(version===connectionVersion)$("connect").disabled=false}
@@ -197,6 +197,7 @@ async function addFile(slug,name){
  let objectURL="",loading=null;
  const query="?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name);
  async function getAudio(){
+  if((saved?.seconds||0)>3600)throw Error("For extended tracks, use Download music to avoid loading the entire file into browser memory.");
   if(objectURL)return objectURL;
   if(!loading)loading=(async()=>{
    const r=await fetch(API+"/file"+query,{cache:"no-store",headers:{Authorization:"Bearer "+key}});
@@ -218,12 +219,12 @@ async function addFile(slug,name){
  }
  download.onclick=async()=>{
   download.disabled=true;download.textContent="Preparing download…";
-  try{const u=await getAudio();const a=document.createElement("a");a.href=u;a.download=name.split("/").pop();document.body.append(a);a.click();a.remove();message.textContent="Download requested."}
+  try{if((saved?.seconds||0)>3600){const d=await api("/download"+query);const link=document.createElement("a");link.href=d.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent="Open fresh direct download link";message.replaceChildren(link);return}const u=await getAudio();const a=document.createElement("a");a.href=u;a.download=name.split("/").pop();document.body.append(a);a.click();a.remove();message.textContent="Download requested."}
   catch(e){message.textContent="Download unavailable: "+e.message;retry.hidden=false}
   finally{download.disabled=false;download.textContent="Download music"}
  };
  retry.onclick=load;player.onerror=()=>{message.textContent="Audio could not play. Try downloading it.";retry.hidden=false};
- if((saved?.seconds||0)<=900&&(saved?.variations||1)===1){await load()}else{message.textContent="Select Load audio or Download music.";retry.textContent="Load audio";retry.hidden=false}
+ if((saved?.seconds||0)<=900&&(saved?.variations||1)===1){await load()}else{message.textContent=(saved?.seconds||0)>3600?"Extended track: choose Download music for a direct link.":"Select Load audio or Download music.";retry.textContent="Load audio";retry.hidden=(saved?.seconds||0)>3600}
 }
 function addReports(slug,files){
  const details=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Audio quality, licences & production details";details.append(summary);
@@ -337,7 +338,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");if(data.nature_layers&&!["V16-nature-mixer","V17-tuning"].includes(deployedVersion)&&(Object.keys(data.nature_layers).length>1||Object.values(data.nature_layers).some(v=>v!==0)))throw Error("Deploy V16 Worker to use multiple nature layers or adjust their gains.");if(data.tuning!=="standard"&&deployedVersion!=="V17-tuning")throw Error("Deploy V17 Worker to enable custom instrument tuning.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,natureLayers:d.natureLayers||null,tuning:d.tuning||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy||submitting||pendingSlug)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");if(data.nature_layers&&!["V16-nature-mixer","V17-tuning","V18-long-nature"].includes(deployedVersion)&&(Object.keys(data.nature_layers).length>1||Object.values(data.nature_layers).some(v=>v!==0)))throw Error("Deploy V16 Worker to use multiple nature layers or adjust their gains.");if(data.tuning!=="standard"&&!["V17-tuning","V18-long-nature"].includes(deployedVersion))throw Error("Deploy V17 Worker to enable custom instrument tuning.");if(data.seconds>3600&&deployedVersion!=="V18-long-nature")throw Error("Deploy V18 Worker to enable extended nature duration.");submitting=true;lock();renderHistory();const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,composition:d.composition||null,natureLayers:d.natureLayers||null,tuning:d.tuning||null,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submitting=false;pendingSlug=d.slug;submittingSlugExpected=true;await watch(d.slug)}catch(e){submitting=false;clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message+" · If submission was interrupted, verify Kaggle before retrying.");unlock();renderHistory()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
