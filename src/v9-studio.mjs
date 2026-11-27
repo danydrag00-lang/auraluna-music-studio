@@ -190,8 +190,42 @@ async function addFile(slug,name){
  if((saved?.seconds||0)<=900&&(saved?.variations||1)===1){await load()}else{message.textContent="Select Load audio or Download music.";retry.textContent="Load audio";retry.hidden=false}
 }
 function addReports(slug,files){
- const details=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Licence & production details";details.append(summary);
- for(const {name} of files.filter(f=>f.name.endsWith(".json"))){const b=document.createElement("button");b.type="button";b.className="v9-secondary";b.textContent=name.includes("licences")?"Licence information":"Production information";b.onclick=async()=>{try{const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));const a=document.createElement("a");a.href=d.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open report";b.after(a)}catch(e){status(e.message)}};details.append(b)}$("players").append(details);
+ const details=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Audio quality, licences & production details";details.append(summary);
+ for(const {name} of files.filter(f=>f.name.endsWith("completed.json"))){
+  const panel=document.createElement("article"),heading=document.createElement("h3"),button=document.createElement("button"),result=document.createElement("div");
+  panel.className="v9-result";heading.textContent="Variation "+(name.match(/variation_(\d+)/)?.[1]||"1")+" · Quality report";
+  button.type="button";button.className="v9-secondary";button.textContent="Review audio quality";
+  result.setAttribute("aria-live","polite");panel.append(heading,button,result);details.append(panel);
+  button.onclick=async()=>{
+   button.disabled=true;result.textContent="Loading validated production report…";
+   try{
+    const response=await fetch(API+"/file?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name),{cache:"no-store",headers:{Authorization:"Bearer "+key}});
+    if(!response.ok)throw Error("Report unavailable (HTTP "+response.status+")");
+    const report=await response.json();if(!panel.isConnected)return;
+    result.replaceChildren();
+    const q=report.quality, list=document.createElement("dl");list.className="v9-timing";
+    const field=(label,value)=>{const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=String(value??"Not recorded");list.append(dt,dd)};
+    const number=(n,suffix="")=>Number.isFinite(n)?n.toFixed(2)+suffix:"Not recorded";
+    field("Engine",report.engine==="fast"?"Fast Acoustic":report.engine==="aria"?"Aria AI":report.engine==="nature"?"Nature recordings":report.engine);
+    field("Composition",report.composition==="thematic"?"Recurring theme":report.composition==="independent"?"Independent sections":"Not recorded / not applicable");
+    field("Duration",durationLabel(q?.decoded_seconds??report.seconds));
+    field("Sample rate",Number.isFinite(report.sample_rate)?report.sample_rate+" Hz":"Not recorded");
+    if(q){
+     field("Technical validation",q.status==="technical_checks_passed"?"Passed":q.status);
+     field("Audio channels",q.channels);field("Intermediate precision",q.checkpoint_bits?q.checkpoint_bits+"-bit":"Not applicable / not recorded");
+     field("Average level (RMS)",number(q.rms_dbfs," dBFS"));field("Sample peak",number(q.sample_peak_dbfs," dBFS"));
+     field("Longest very quiet passage",number(q.longest_very_quiet_seconds," s"));
+     if(q.composition_analysis){field("Musical sections",q.composition_analysis.sections);field("Highest MIDI similarity",Number.isFinite(q.composition_analysis.max_similarity)?(100*q.composition_analysis.max_similarity).toFixed(1)+"%":"Insufficient comparison data");}
+     for(const [instrument,count] of Object.entries(q.instrument_coverage||{}))field((instruments[instrument]||instrument)+" · sections rendered",count);
+    }
+    result.append(list);
+    const note=document.createElement("p");note.className="hint";note.textContent=q?"Technical checks do not certify artistic quality. MIDI similarity does not measure repetition in recorded nature or flute layers. Listen before publishing.":"Older production: detailed quality measurements were not recorded.";result.append(note);
+    if(Array.isArray(q?.warnings)&&q.warnings.length){const h=document.createElement("strong"),ul=document.createElement("ul");h.textContent="Listening review warnings";for(const warning of q.warnings){const li=document.createElement("li");li.textContent=String(warning);ul.append(li)}result.append(h,ul)}
+    button.textContent="Refresh quality report";
+   }catch(e){result.textContent=e.message;button.textContent="Retry quality report"}finally{button.disabled=false}
+  };
+ }
+ for(const {name} of files.filter(f=>f.name.endsWith(".json"))){const b=document.createElement("button");b.type="button";b.className="v9-secondary";b.textContent=(name.includes("licences")?"Licence information":"Raw production report")+" · Variation "+(name.match(/variation_(\d+)/)?.[1]||"1");b.onclick=async()=>{try{const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));const a=document.createElement("a");a.href=d.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open report";b.after(a)}catch(e){status(e.message)}};details.append(b)}$("players").append(details);
 }
 async function watch(slug){
  continuousObservation=Boolean(submittingSlugExpected);submittingSlugExpected=false;
