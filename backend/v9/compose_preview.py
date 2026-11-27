@@ -1,5 +1,52 @@
 """First end-to-end V9 smoke test: original Aria MIDI, acoustic piano, optional rain."""
-import argparse, json, os, subprocess, uuid, hashlib, time
+# The same downloaded script also runs as a private, job-local inference service.
+# This branch must precede audio imports: the Aria virtualenv is separate.
+import sys
+if len(sys.argv)>1 and sys.argv[1]=="--serve-aria":
+    import json, socket, time, traceback
+    from argparse import Namespace
+    from functools import lru_cache
+    from pathlib import Path
+    from aria import run as aria_run
+    socket_path,checkpoint=sys.argv[2:4]
+    original_loader=aria_run._load_inference_model_torch
+    @lru_cache(maxsize=1)
+    def cached_loader(checkpoint_path,config_name,strict=True):
+        started=time.monotonic()
+        model=original_loader(checkpoint_path,config_name,strict)
+        print(f"PERF Aria model loaded: {time.monotonic()-started:.1f}s",flush=True)
+        return model
+    aria_run._load_inference_model_torch=cached_loader
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as listener:
+        listener.bind(socket_path)
+        listener.listen(1)
+        print("Aria inference service ready",flush=True)
+        while True:
+            conn,_=listener.accept()
+            with conn,conn.makefile("rwb") as stream:
+                try:
+                    request=json.loads(stream.readline(65536))
+                    output=Path(request["output"])
+                    aria_run.generate(Namespace(
+                        variations=1,prompt_duration=15,backend="torch_cuda",
+                        length=2048,checkpoint_path=checkpoint,
+                        prompt_midi_path=request["seed"],save_dir=str(output),
+                        temp=.98,min_p=.035,top_p=None,end=False,compile=False))
+                    response={"ok":True}
+                except Exception as exc:
+                    traceback.print_exc()
+                    response={"ok":False,"error":str(exc)}
+                    cached_loader.cache_clear()
+                    import torch
+                    torch.cuda.empty_cache()
+                try:
+                    stream.write((json.dumps(response)+"\n").encode())
+                    stream.flush()
+                except OSError:
+                    pass
+    raise SystemExit(0)
+
+import argparse, json, os, subprocess, uuid, hashlib, time, socket
 from pathlib import Path
 import numpy as np
 import pretty_midi
@@ -27,8 +74,26 @@ for pitch,start,dur,vel in [(50,0,3.8,48),(57,.8,2.8,44),(66,1.3,1.6,58),(69,3.1
 seed.instruments.append(track)
 seed.write(str(out/"seed.mid"))
 started=time.monotonic()
-with (out/"aria.log").open("w") as log:
-    subprocess.run(["/tmp/aria-env/bin/aria","generate","--backend","torch_cuda","--checkpoint_path",str(root/"models/model.safetensors"),"--prompt_midi_path",str(out/"seed.mid"),"--prompt_duration","15","--variations","1","--temp","0.98","--min_p","0.035","--length","2048","--save_dir",str(out)],stdout=log,stderr=subprocess.STDOUT,check=True)
+service=os.environ.get("AURALUNA_ARIA_SOCKET")
+if service:
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as conn:
+        deadline=time.monotonic()+90
+        while True:
+            try:
+                conn.connect(service)
+                break
+            except (FileNotFoundError,ConnectionRefusedError):
+                if time.monotonic()>=deadline:raise RuntimeError("Aria service did not start; inspect aria-service.log")
+                time.sleep(.5)
+        conn.settimeout(1800)
+        with conn.makefile("rwb") as stream:
+            stream.write((json.dumps({"seed":str(out/"seed.mid"),"output":str(out)})+"\n").encode())
+            stream.flush()
+            reply=json.loads(stream.readline(65536))
+            if not reply.get("ok"):raise RuntimeError("Aria service: "+reply.get("error","unknown error"))
+else:
+    with (out/"aria.log").open("w") as log:
+        subprocess.run(["/tmp/aria-env/bin/aria","generate","--backend","torch_cuda","--checkpoint_path",str(root/"models/model.safetensors"),"--prompt_midi_path",str(out/"seed.mid"),"--prompt_duration","15","--variations","1","--temp","0.98","--min_p","0.035","--length","2048","--save_dir",str(out)],stdout=log,stderr=subprocess.STDOUT,check=True)
 print(f"Aria generation: {time.monotonic()-started:.1f}s",flush=True)
 files=sorted(out.glob("res*.mid"))
 if not files: raise RuntimeError("Aria produced no MIDI; inspect "+str(out/"aria.log"))
