@@ -48,7 +48,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":11,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":12,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -281,12 +281,13 @@ for v in range(1,a.variations+1):
     # Compare 12-second spectral-change sequences at least 24 seconds apart.
     # Centring each band reduces false matches from constant instrumentation.
     # Report a heuristic signal only; repeating nature, chords and timbre can be intentional.
-    matches=[]; comparisons=0; max_similarity=None
+    matches=[]; comparisons=0; max_similarity=None; stride=6
     if len(fingerprints)>=36:
         features=np.asarray(fingerprints,dtype=np.float32)
         changes=np.diff(features,axis=0)
         windows=[]; times=[]
-        for start in range(0,len(changes)-11,6):
+        stride=max(6,6*math.ceil(len(changes)/3600))
+        for start in range(0,len(changes)-11,stride):
             vector=changes[start:start+12].reshape(-1)
             norm=float(np.linalg.norm(vector))
             if norm>.1:
@@ -307,7 +308,7 @@ for v in range(1,a.variations+1):
                     max_similarity=score if max_similarity is None else max(max_similarity,score)
                     if score>=.92:matches.append((score,int(times[start+i]),int(times[j])))
     matches.sort(reverse=True)
-    quality["audio_repetition"]={"method":"12-second log-spectral change cosine similarity; 6-second scan stride","comparisons":comparisons,"max_similarity":max_similarity,"candidate_matches":len(matches),"examples":[{"first_seconds":a,"second_seconds":b,"similarity":round(score,4)} for score,a,b in matches[:5]],"scope":"Heuristic on final decoded audio, not proof of duplicate passages or artistic quality."}
+    quality["audio_repetition"]={"method":"12-second log-spectral change cosine similarity","scan_stride_seconds":stride,"comparisons":comparisons,"max_similarity":max_similarity,"candidate_matches":len(matches),"examples":[{"first_seconds":a,"second_seconds":b,"similarity":round(score,4)} for score,a,b in matches[:5]],"scope":"Heuristic on final decoded audio; longer tracks use wider scan intervals, which can miss repetitions. Not proof of duplicate passages or artistic quality."}
     if matches and mood and a.composition=="independent":quality["warnings"].append("Audio analysis found similar spectral-change passages; listen at the reported timestamps.")
     quality["instrument_coverage"]={name:sum(int(x.get("instrument_events",{}).get(name,0)>0) for k,x in state["sections"].items() if k.startswith(f"{v}:")) for name in (instruments.split(",") if instruments else [])}
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
