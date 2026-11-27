@@ -165,7 +165,7 @@ for name,ns in parts.items():
             report[name]=len(starts)
         mix+=balance(x,levels[name])*10**(gains.get(name,0)/20)
         continue
-    if not ns:continue
+    if not ns:raise RuntimeError("No playable notes for selected instrument: "+name)
     x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
     x=balance(x,levels[name])*10**(gains.get(name,0)/20)
     pan={"flute":.18,"cello":-.18,"harp":.12}.get(name,0)
@@ -196,8 +196,8 @@ ceiling=10**(-8/20)
 threshold=.7*ceiling
 absx=np.abs(mix)
 mix=np.sign(mix)*np.where(absx>threshold,threshold+(ceiling-threshold)*np.tanh((absx-threshold)/(ceiling-threshold)),absx)
-assert np.isfinite(mix).all()
-sf.write(out/"ensemble.flac",mix,SR,subtype="PCM_16" if a.section else "PCM_24")
+if not np.isfinite(mix).all():raise RuntimeError("Non-finite samples in ensemble")
+sf.write(out/"ensemble.flac",mix,SR,subtype="PCM_24")
 if not a.section:
     subprocess.run(["ffmpeg","-y","-loglevel","error","-i",str(out/"ensemble.flac"),"-b:a","320k",str(out/"ensemble.mp3")],check=True)
 arr=pm.PrettyMIDI()
