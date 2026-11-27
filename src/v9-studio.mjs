@@ -37,6 +37,25 @@ function buildRequest(){
  if(data.format==='wav'&&data.seconds&&data.seconds*288000>=2**32-65536)throw Error('This duration exceeds the standard WAV size limit. Choose MP3 or FLAC.');
  return data;
 }
+function estimate(r){
+ const natureOnly=Array.isArray(r.instruments)&&!r.instruments.length&&r.nature!=="none";
+ const mode=natureOnly?"nature":r.engine;
+ const count=Array.isArray(r.instruments)?r.instruments.length:null;
+ const signature=[mode,count===null?"prompt":r.instruments.slice().sort().join(","),r.format,r.nature||"inferred"].join("|");
+ const minutes=r.seconds*r.variations/60;
+ // Broad planning assumptions, not measured CPU benchmarks.
+ const base=mode==="nature"?[2,.12,6,.7]:mode==="fast"?[2,.6,8,2.5]:[4,3,10,7];
+ let low=base[0]+base[1]*minutes,high=base[2]+base[3]*minutes;
+ const compute=mode==="aria"?"GPU":"CPU";
+ const rows=history().filter(x=>x.estimateSignature===signature&&x.compute===compute&&x.timingReliable===true&&x.measuredSeconds>0&&x.seconds>0&&x.variations>0&&Math.abs(Math.log((x.seconds*x.variations/60)/minutes))<=Math.log(2));
+ const rates=rows.map(x=>x.measuredSeconds/(x.seconds*x.variations)).sort((a,b)=>a-b);
+ if(rates.length>=3){
+  const median=rates[Math.floor(rates.length/2)]*minutes;
+  low=Math.max(1,Math.min(median*.7,rates[0]*minutes*.8));high=Math.max(low+1,median*1.5,rates[rates.length-1]*minutes*1.2);
+ }
+ return {low:Math.max(1,Math.floor(low)),high:Math.max(2,Math.ceil(high)),signature,source:rates.length>=3?"Based on "+rates.length+" comparable completed jobs":"Initial planning estimate"};
+}
+function estimateLabel(e){return e?e.low+"–"+e.high+" min":"—"}
 function refresh(){
  const infer=$('mode').value==='prompt';$('mix-section').hidden=infer;$('preset').disabled=infer;$('infer-duration-row').hidden=true;$('duration').disabled=false;
  const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&$('nature').value!=='none';const fast=$('composition-engine').value==='fast';
@@ -46,8 +65,8 @@ function refresh(){
  if(natureOnly)$('variations').value='1';
  $('duration-limit').textContent=natureOnly?'Nature-only: up to 60 minutes.':fast?'Fast acoustic: up to 60 minutes combined across variations.':'Aria: up to 15 minutes combined across variations.';
  for(const c of Object.values(controls)){c.slider.disabled=!c.check.checked;c.value.textContent=(Number(c.slider.value)>0?'+':'')+c.slider.value+' dB'}
- try{const r=buildRequest();$('summary').textContent=(r.preset?presets[r.preset][0]:'Prompt-based configuration')+' · '+(r.seconds?r.seconds/60+' min':'duration inferred')+' · '+(r.engine==='fast'?'Fast acoustic':'Aria AI')+' · '+r.variations+' variation(s) · '+r.format.toUpperCase()+(r.instruments?' · '+r.instruments.map(k=>instruments[k]).join(', ')+' · '+r.nature:'');}
- catch(e){$('summary').textContent=e.message}
+ try{const r=buildRequest();const e=estimate(r);$('estimate-time').textContent=estimateLabel(e);$('estimate-basis').textContent=e.source+' · Includes typical setup allowance; queue delays can extend it.';$('summary').textContent=(r.preset?presets[r.preset][0]:'Prompt-based configuration')+' · '+(r.seconds?r.seconds/60+' min':'duration inferred')+' · '+(r.engine==='fast'?'Fast acoustic':'Aria AI')+' · '+r.variations+' variation(s) · '+r.format.toUpperCase()+(r.instruments?' · '+r.instruments.map(k=>instruments[k]).join(', ')+' · '+r.nature:'');}
+ catch(e){$('summary').textContent=e.message;$('estimate-time').textContent='—';$('estimate-basis').textContent='Choose valid production settings.'}
 }
 
 const API="https://auraluna-api.dhanushmanoharan1996.workers.dev";
@@ -55,15 +74,16 @@ let key="",busy=false,timer=null,active="",attempt=0;
 const historyKey="auraluna-v9-jobs";
 function history(){try{return JSON.parse(localStorage.getItem(historyKey)||"[]").filter(x=>/^auraluna-[a-f0-9]{32}$/.test(x.slug))}catch{return []}}
 let pendingMeta=null;
-let selectedEnd=0,clockRunning=false;
+document.addEventListener("visibilitychange",()=>{if(document.hidden)continuousObservation=false});
+let selectedEnd=0,clockRunning=false,selectedEstimate=null,continuousObservation=false,submittingSlugExpected=false;
 function durationLabel(seconds){if(!Number.isFinite(seconds)||seconds<=0)return "Not recorded";const n=Math.round(seconds);return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
-function showRequest(meta){$("requested-duration").textContent=durationLabel(meta?.seconds);$("requested-style").textContent=meta?.title||"Saved production";$("requested-format").textContent=meta?.format?.toUpperCase()||"—";$("requested-compute").textContent=meta?.compute?meta.compute+" requested":"Not recorded";}
+function showRequest(meta){selectedEstimate=meta?.estimate||null;$("requested-estimate").textContent=estimateLabel(selectedEstimate);$("requested-duration").textContent=durationLabel(meta?.seconds);$("requested-style").textContent=meta?.title||"Saved production";$("requested-format").textContent=meta?.format?.toUpperCase()||"—";$("requested-compute").textContent=meta?.compute?meta.compute+" requested":"Not recorded";}
 let monitorVersion=0, pollInFlight=false, selectedStarted=0, lastChecked=0, unknownChecks=0;
 const terminalStates=new Set(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED","CANCEL_REQUESTED"]);
 function updateSaved(slug,patch){try{const rows=history();localStorage.setItem(historyKey,JSON.stringify(rows.map(x=>x.slug===slug?{...x,...patch}:x)))}catch{}renderHistory()}
 function showProgress(text,running=false){$("production-status").textContent=text;$("production-panel").hidden=false;$("production-progress").hidden=!running;$("check-status").disabled=pollInFlight||!active||!key;}
 function elapsed(){if(!selectedStarted||(!clockRunning&&!selectedEnd))return "—";const n=Math.max(0,Math.floor(((selectedEnd||Date.now())-selectedStarted)/1000));return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
-function updateClock(){$("elapsed-time").textContent=elapsed();$("last-check").textContent=lastChecked?new Date(lastChecked).toLocaleTimeString():"—"}
+function updateClock(){const spent=selectedStarted?((selectedEnd||Date.now())-selectedStarted)/60000:0;$("remaining-estimate").textContent=selectedEnd?"Finished / stopped":!clockRunning||!selectedEstimate?"—":spent>=selectedEstimate.high?"Taking longer than estimated":Math.max(0,Math.floor(selectedEstimate.low-spent))+"–"+Math.max(1,Math.ceil(selectedEstimate.high-spent))+" min (approx.)";$("elapsed-time").textContent=elapsed();$("last-check").textContent=lastChecked?new Date(lastChecked).toLocaleTimeString():"—"}
 setInterval(updateClock,1000);
 function remember(slug){try{localStorage.setItem(historyKey,JSON.stringify([{slug,...(history().find(x=>x.slug===slug)||{}),...(pendingMeta||{})},...history().filter(x=>x.slug!==slug)].slice(0,30)))}catch{}renderHistory()}
 function renderHistory(){
@@ -156,6 +176,7 @@ function addReports(slug,files){
  for(const {name} of files.filter(f=>f.name.endsWith(".json"))){const b=document.createElement("button");b.type="button";b.className="v9-secondary";b.textContent=name.includes("licences")?"Licence information":"Production information";b.onclick=async()=>{try{const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));const a=document.createElement("a");a.href=d.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open report";b.after(a)}catch(e){status(e.message)}};details.append(b)}$("players").append(details);
 }
 async function watch(slug){
+ continuousObservation=Boolean(submittingSlugExpected);submittingSlugExpected=false;
  if(!key){status("Connect first.");return}
  clearTimeout(timer);const version=++monitorVersion;active=slug;remember(slug);pendingMeta=null;
  const saved=history().find(x=>x.slug===slug);
@@ -190,7 +211,7 @@ async function poll(slug,version=monitorVersion){
     if(uncertain){unknownChecks++;showProgress("Kaggle has not confirmed the production status. No audio found."+(unknownChecks<4?" Checking again automatically.":" Open Production details to verify the job; do not submit a duplicate."),false);if(unknownChecks<4)next=30000;return}
     showProgress("Completed, but no audio is available yet.");next=20000;return
    }
-   clockRunning=false;selectedEnd=selectedEnd||Date.now();updateSaved(slug,{state:"COMPLETE",observedEnd:selectedEnd});updateClock();
+   clockRunning=false;selectedEnd=selectedEnd||Date.now();const saved=history().find(x=>x.slug===slug);const measuredSeconds=(selectedEnd-selectedStarted)/1000;updateSaved(slug,{state:"COMPLETE",observedEnd:selectedEnd,...(continuousObservation&&saved?.estimateSignature&&measuredSeconds>0?{measuredSeconds,timingReliable:true}:{})});updateClock();refresh();
    for(const f of audio){if(version!==monitorVersion)return;await addFile(slug,f.name)}
    if(version!==monitorVersion)return;
    if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);
@@ -201,12 +222,12 @@ async function poll(slug,version=monitorVersion){
    showProgress((state.includes("CANCEL")?"Production canceled.":"Production failed.")+(d.failureMessage?" "+d.failureMessage:" No further details supplied by Kaggle."));
    unlock();return
   }
-  const label=state==="RUNNING"?"Creating your music…":state==="QUEUED"?"Waiting for Kaggle GPU…":state==="CANCEL_REQUESTED"?"Cancellation requested…":"Kaggle status: "+state;
+  const label=state==="RUNNING"?"Creating your music…":state==="QUEUED"?"Waiting for Kaggle compute…":state==="CANCEL_REQUESTED"?"Cancellation requested…":"Kaggle status: "+state;
   showProgress(label+(selectedStarted&&Date.now()-selectedStarted>20*60000?" This is taking longer than usual; check status or review the notebook.":""),true);
   next=15000;
  }catch(e){
   if(version!==monitorVersion)return;
-  attempt++;showProgress("Status check failed: "+e.message+(attempt<4?" · Reconnecting automatically.":" · Use Check status to retry."));
+  continuousObservation=false;attempt++;showProgress("Status check failed: "+e.message+(attempt<4?" · Reconnecting automatically.":" · Use Check status to retry."));
   if(attempt<4)next=Math.min(60000,15000*attempt);else unlock();
  }finally{
   if(version===monitorVersion){
@@ -218,7 +239,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";selectedStarted=Date.now();selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(selectedStarted).toISOString(),seconds:data.seconds,format:data.format,engine:data.engine,compute:d.compute||null,variations:data.variations,state:"QUEUED"};await watch(d.slug)}catch(e){clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message);unlock()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";const prediction=estimate(data);const submittedAt=Date.now();selectedStarted=submittedAt;selectedEnd=0;clockRunning=true;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format,estimate:prediction});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(submittedAt).toISOString(),estimate:prediction,estimateSignature:prediction.signature,seconds:data.seconds,format:data.format,engine:data.engine,compute:d.compute||null,variations:data.variations,state:"QUEUED"};submittingSlugExpected=true;await watch(d.slug)}catch(e){clockRunning=false;selectedEnd=Date.now();updateClock();showProgress(e.message);unlock()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
