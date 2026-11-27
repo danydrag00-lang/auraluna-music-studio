@@ -56,16 +56,76 @@ from scipy.signal import butter,sosfilt
 p=argparse.ArgumentParser()
 p.add_argument("--mood",choices=["deep_sleep","luxury_spa","meditation","peaceful_piano"],default="luxury_spa")
 p.add_argument("--seconds",type=int,default=30)
-p.add_argument("--engine",choices=["aria","fast"],default="aria")
+p.add_argument("--engine",choices=["aria","fast","studio"],default="aria")
 p.add_argument("--midi-only",action="store_true",help="Skip unused preview rendering during production")
 p.add_argument("--rain",action="store_true")
 a=p.parse_args()
-if not 15<=a.seconds<=(120 if a.engine=="fast" else 60):p.error("Unsupported composition section duration")
+if not 15<=a.seconds<=(120 if a.engine in ("fast","studio") else 60):p.error("Unsupported composition section duration")
 root=Path(os.environ.get("AURALUNA_ROOT","/kaggle/working/Auraluna-V9"))
 out=root/"productions"/uuid.uuid4().hex[:12]
 out.mkdir(parents=True)
 rng=np.random.default_rng(int(os.environ["AURALUNA_PERFORMANCE_SEED"]) if "AURALUNA_PERFORMANCE_SEED" in os.environ else None)
 sr=48000
+if a.engine=="studio":
+    # Original rule-based composer: long phrases, seventh/add9 harmony,
+    # close-position voice leading, sparse melody, and section-level development.
+    key=int(os.environ.get("AURALUNA_TONIC","50"))
+    section=int(os.environ.get("AURALUNA_SECTION","0"))
+    sections=max(1,int(os.environ.get("AURALUNA_SECTIONS","1")))
+    thematic=os.environ.get("AURALUNA_COMPOSITION","independent")=="thematic"
+    theme=np.random.default_rng(int(os.environ.get("AURALUNA_MOTIF_SEED","1")))
+    minor=a.mood=="deep_sleep"
+    scale=[0,2,3,5,7,8,10] if minor else [0,2,4,5,7,9,11]
+    progressions=[(0,5,3,0,2,3,4,0),(0,2,5,3,0,5,4,0),(0,3,5,2,3,1,4,0),(0,5,0,3,2,5,4,0)]
+    progression=progressions[int(theme.integers(len(progressions)))]
+    motif=theme.choice([0,1,2,3,4],size=5,replace=True)
+    beat=float(theme.uniform(1.55,1.95) if minor else theme.uniform(1.13,1.55))
+    bars=max(2,round(a.seconds/(beat*4)))
+    weights=np.array([1+.045*math.sin(i*.7)+float(rng.uniform(-.025,.025)) for i in range(bars)])
+    edges=np.concatenate(([0.],np.cumsum(weights/weights.sum()*a.seconds)))
+    midi=pretty_midi.PrettyMIDI()
+    track=pretty_midi.Instrument(0)
+    track.name="Studio Premium harmonic score"
+    previous=[key+12,key+16,key+19];last=key+19
+    def note(p,t,d,v):
+        t=max(0.,float(t));end=min(float(a.seconds),t+float(d))
+        if end>t:track.notes.append(pretty_midi.Note(int(np.clip(v,28,65)),int(p),t,end))
+    def pc(d):return (key+scale[d%7])%12
+    for i in range(bars):
+        t=float(edges[i]);length=float(edges[i+1]-t)
+        arc=math.sin(math.pi*(section+(i+.5)/bars)/sections)
+        degree=progression[(i+(section//2 if thematic else 0))%8]
+        if i==0 or i==bars-1:degree=0
+        elif i==bars-2 and bars>3:degree=4
+        chord=[degree,degree+2,degree+4,degree+(6 if i%4 in (1,2) else 8)]
+        bass=next(p for p in range(38,50) if p%12==pc(degree))
+        note(bass,t,length*.93,38+4*arc+rng.uniform(-2,2))
+        # Search inversions for minimum total motion across three inner voices.
+        import itertools
+        options=[[p for p in range(50,73) if p%12==pc(d)] for d in chord[1:]]
+        voicings=[sorted(v) for v in itertools.product(*options) if len(set(v))==3 and max(v)-min(v)<=19]
+        voices=min(voicings,key=lambda v:sum(abs(x-y) for x,y in zip(v,previous))+.3*abs(sum(v)-sum(previous))) if voicings else sorted(o[0] for o in options)
+        previous=voices
+        for j,pitch in enumerate(voices):
+            offset=length*(.08+j*(.11 if i%4<2 else .045))
+            note(pitch,t+offset,length*(.78-j*.06),35+5*arc+rng.uniform(-3,3))
+        # Answer a melodic question in the second half of each four-bar phrase.
+        density=2 if minor else 3
+        if i%4==3:density=1
+        if i==bars-1:density=1
+        for j,slot in enumerate([.20,.49,.73][:density]):
+            if j and rng.random()<(0.35 if minor else .15):continue
+            motion=int(motif[(i+j)%len(motif)])
+            target=chord[motion%len(chord)] if i%4!=3 else degree
+            if i==bars-1:target=0
+            candidates=[p for p in range(64,82) if p%12==pc(target)]
+            pitch=min(candidates,key=lambda p:abs(p-last)+float(rng.uniform(0,2)))
+            last=pitch
+            note(pitch,t+length*slot,length*(.27 if density>1 else .65),45+6*arc+rng.uniform(-3,3))
+    midi.instruments.append(track)
+    midi.write(str(out/"arrangement.mid"))
+    print("STUDIO PREMIUM MIDI READY:",out/"arrangement.mid",flush=True)
+    raise SystemExit(0)
 if a.engine=="fast":
     # Section-aware composition: recurring motifs, gentle breathing space, stable tonal centre.
     key=int(os.environ.get("AURALUNA_TONIC","50"))
