@@ -2,6 +2,9 @@
 import os
 import sys
 import subprocess
+import shutil
+import importlib.util
+import time
 from pathlib import Path
 import urllib.request
 
@@ -12,13 +15,23 @@ for name in ("engine","instruments","nature","models","licenses","presets","seed
     (ROOT/name).mkdir(parents=True, exist_ok=True)
 
 def run(cmd):
-    with (ROOT/"logs/setup.log").open("a") as log:
-        subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True)
+    started=time.monotonic()
+    try:
+        with (ROOT/"logs/setup.log").open("a") as log:
+            subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True)
+    finally:
+        print(f"PERF setup {Path(cmd[0]).name} {cmd[1]}: {time.monotonic()-started:.1f}s",flush=True)
 
 if not (ROOT/"setup-complete").exists():
-    run(["apt-get","update","-qq"])
-    run(["apt-get","install","-y","-qq","fluidsynth","ffmpeg"])
-    run([sys.executable,"-m","pip","install","-q","uv","pretty_midi","pyfluidsynth","soundfile","scipy","requests","beautifulsoup4","huggingface_hub","py7zr"])
+    missing_tools=[name for name in ("fluidsynth","ffmpeg") if not shutil.which(name)]
+    if missing_tools:
+        run(["apt-get","update","-qq"])
+        run(["apt-get","install","-y","-qq",*missing_tools])
+    packages={"pretty_midi":"pretty_midi","fluidsynth":"pyfluidsynth","soundfile":"soundfile","scipy":"scipy","requests":"requests","bs4":"beautifulsoup4","huggingface_hub":"huggingface_hub","py7zr":"py7zr"}
+    missing=[pkg for module,pkg in packages.items() if importlib.util.find_spec(module) is None]
+    if not shutil.which("uv"):missing.append("uv")
+    if missing:run([sys.executable,"-m","pip","install","-q",*missing])
+    print("PERF reused preinstalled tools and packages where available",flush=True)
     (ROOT/"setup-complete").touch()
 if not (REPO/".git").exists():
     run(["git","clone","--depth","1","https://github.com/EleutherAI/aria.git",str(REPO)])
