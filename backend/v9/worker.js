@@ -7,7 +7,7 @@ const nature=["none","rain","river","ocean","forest"];
 function validate(r){
  if(!r||typeof r!=="object"||Array.isArray(r))throw Error("Invalid request");
  const out={job:crypto.randomUUID().replaceAll("-",""),seconds:r.seconds??120,variations:r.variations??1,format:r.format??"mp3",prompt:r.prompt??""};
- if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>300)throw Error("Initial remote testing supports 15–300 seconds.");
+ if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>3600)throw Error("Choose 15 seconds to 60 minutes.");
  if(!Number.isInteger(out.variations)||out.variations!==1)throw Error("Initial remote testing supports one variation.");
  if(!["mp3","flac","wav"].includes(out.format)||typeof out.prompt!=="string"||out.prompt.length>2000)throw Error("Invalid format or prompt");
  if(r.preset!==undefined){if(!presets.includes(r.preset))throw Error("Invalid preset");out.preset=r.preset}
@@ -15,6 +15,8 @@ function validate(r){
  if(r.nature!==undefined){if(!nature.includes(r.nature))throw Error("Invalid ambience");out.nature=r.nature}
  if(r.gains!==undefined){if(!r.gains||typeof r.gains!=="object"||Array.isArray(r.gains)||Object.entries(r.gains).some(([k,v])=>!out.instruments?.includes(k)||typeof v!=="number"||!Number.isFinite(v)||v< -60||v>12))throw Error("Invalid gains");out.gains=r.gains}
  if(out.instruments?.length===0&&out.nature==="none")throw Error("Choose a sound source");
+ const natureOnly=Array.isArray(out.instruments)&&out.instruments.length===0&&nature.includes(out.nature)&&out.nature!=="none";
+ if(out.seconds>900&&!natureOnly)throw Error("Instrumental and prompt-mode productions support up to 15 minutes; nature-only productions support 60 minutes.");
  return out;
 }
 // Kaggle output links can use Kaggle download gateways or Google storage.
@@ -54,7 +56,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V10-download-fix",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET)});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V11-long-duration",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET)});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
