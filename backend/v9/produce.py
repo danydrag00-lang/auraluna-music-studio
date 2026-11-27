@@ -46,7 +46,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":7,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":8,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -153,14 +153,19 @@ for v in range(1,a.variations+1):
                         env["AURALUNA_MOTIF_SEED"]=str(int.from_bytes(os.urandom(8),"big"))
                         continue
                     run([sys.executable,str(HERE/"arrange.py"),"--root",str(isolated),"--midi",str(midi),"--mood",mood,"--seconds",str(section_seconds),"--instruments",instruments,"--nature","none","--section","--gains",json.dumps(gains)],folder/"arrange.log",env)
-                    source=midi.parent/"ensemble/ensemble.flac"
+                    ensemble=midi.parent/"ensemble"
+                    section_report=json.loads((ensemble/"report.json").read_text())
+                    expected=set(instruments.split(","))
+                    rendered=section_report.get("notes",{})
+                    if any(not rendered.get(name,0) for name in expected):raise RuntimeError("Missing instrument in rendered section")
+                    source=ensemble/"ensemble.flac"
                     if not valid(source,section_seconds*SR):raise RuntimeError("Invalid section")
                     import shutil
                     temp=dest.with_suffix(".part")
                     # Section renderer already writes lossless PCM24 checkpoints.
                     shutil.move(str(source),str(temp));os.replace(temp,dest)
                     shutil.copy2(midi,folder/f"section_{i:04d}.mid")
-                    state["sections"][key]={"signature":signature,"fingerprint":fingerprint,"similarity":maximum,"file":str(dest.relative_to(job))}
+                    state["sections"][key]={"signature":signature,"fingerprint":fingerprint,"similarity":maximum,"instrument_events":rendered,"file":str(dest.relative_to(job))}
                     save();break
                 except (subprocess.CalledProcessError,RuntimeError,ValueError):
                     if attempt==2:raise
@@ -246,6 +251,7 @@ for v in range(1,a.variations+1):
     if rms<1e-5 or decoded_peak<1e-5:raise RuntimeError("Export is effectively silent")
     if decoded_peak>=.999:raise RuntimeError("Export reaches digital clipping threshold")
     quality={"status":"technical_checks_passed","decoded_seconds":decoded_frames/SR,"sample_rate":SR,"channels":2,"checkpoint_bits":24 if mood else None,"rms_dbfs":20*math.log10(max(rms,1e-12)),"sample_peak_dbfs":20*math.log10(max(decoded_peak,1e-12)),"longest_very_quiet_seconds":longest_quiet/SR,"warnings":[]}
+    quality["instrument_coverage"]={name:sum(int(x.get("instrument_events",{}).get(name,0)>0) for k,x in state["sections"].items() if k.startswith(f"{v}:")) for name in (instruments.split(",") if instruments else [])}
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recording with varied starting phase and gentle level variation" if nature!="none" else None}
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
     if stats["limited_samples"]>stats["samples"]*.01:quality["warnings"].append("Frequent peak limiting; review dynamics.")
