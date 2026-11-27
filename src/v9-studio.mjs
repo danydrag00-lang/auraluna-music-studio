@@ -114,20 +114,41 @@ function showProgress(text,running=false){$("production-status").textContent=tex
 function elapsed(){if(!selectedStarted||(!clockRunning&&!selectedEnd))return "—";const n=Math.max(0,Math.floor(((selectedEnd||Date.now())-selectedStarted)/1000));return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
 function updateClock(){const spent=selectedStarted?((selectedEnd||Date.now())-selectedStarted)/60000:0;$("remaining-estimate").textContent=selectedEnd?"Finished / stopped":!clockRunning||!selectedEstimate?"—":spent>=selectedEstimate.high?"Taking longer than estimated":Math.max(0,Math.floor(selectedEstimate.low-spent))+"–"+Math.max(1,Math.ceil(selectedEstimate.high-spent))+" min (approx.)";$("elapsed-time").textContent=elapsed();$("last-check").textContent=lastChecked?new Date(lastChecked).toLocaleTimeString():"—"}
 setInterval(updateClock,1000);
-function remember(slug){try{localStorage.setItem(historyKey,JSON.stringify([{slug,...(history().find(x=>x.slug===slug)||{}),...(pendingMeta||{})},...history().filter(x=>x.slug!==slug)].slice(0,30)))}catch{}renderHistory()}
+function remember(slug){try{localStorage.setItem(historyKey,JSON.stringify([{slug,...(history().find(x=>x.slug===slug)||{}),...(pendingMeta||{})},...history().filter(x=>x.slug!==slug)]))}catch{ $("library-status").textContent="Browser storage unavailable or full. Export your catalogue to preserve it." }renderHistory()}
 function renderHistory(){
  const el=$("history");el.replaceChildren();
- const rows=history();
- if(!rows.length){el.textContent="Your generated music will appear here.";return}
- for(const {slug,title,date,state,seconds,format,compute} of rows){
+ const query=$("library-search").value.trim().toLowerCase(),filter=$("library-filter").value;
+ const all=history(),rows=all.filter(x=>(!query||[x.title,x.slug,x.engine,x.composition,x.format,x.notes].some(v=>String(v||"").toLowerCase().includes(query)))&&(filter==="all"||filter==="ready"&&["COMPLETE","COMPLETED","SUCCESS"].includes(x.state)||filter==="favorites"&&x.favorite));
+ $("library-count").textContent=rows.length+" of "+all.length+" productions";
+ if(!rows.length){el.textContent=all.length?"No matching productions.":"Your generated music will appear here.";return}
+ for(const {slug,title,date,state,seconds,format,compute,favorite,notes} of rows){
   const item=document.createElement("div");item.className="v9-saved";
   const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("p"),button=document.createElement("button");
   name.textContent=title||"Saved track";
   const labels={COMPLETE:"Ready",COMPLETED:"Ready",SUCCESS:"Ready",RUNNING:"Creating",QUEUED:"Queued",ERROR:"Failed",FAILED:"Failed",CANCELED:"Canceled",CANCELLED:"Canceled"};
   meta.textContent=[date?new Date(date).toLocaleString():"",seconds?"Requested: "+durationLabel(seconds):"Requested duration not recorded",format?.toUpperCase(),compute?compute+" requested":"",labels[state]||"Check status"].filter(Boolean).join(" · ");
-  info.append(name,meta);button.type="button";button.className="v9-secondary";button.textContent=["COMPLETE","COMPLETED","SUCCESS"].includes(state)?"Listen & download":"Open";button.disabled=submitting||Boolean(pendingSlug&&pendingSlug!==slug);button.onclick=()=>watch(slug);item.append(info,button);el.append(item);
+  info.append(name,meta);button.type="button";button.className="v9-secondary";button.textContent=["COMPLETE","COMPLETED","SUCCESS"].includes(state)?"Listen & download":"Open";button.disabled=submitting||Boolean(pendingSlug&&pendingSlug!==slug);button.onclick=()=>watch(slug);const actions=document.createElement("div");actions.className="v9-actions";
+  const star=document.createElement("button"),edit=document.createElement("button");star.type=edit.type="button";star.className=edit.className="v9-secondary";star.textContent=favorite?"★ Saved":"☆ Favourite";star.setAttribute("aria-pressed",String(Boolean(favorite)));star.onclick=()=>updateSaved(slug,{favorite:!favorite});
+  edit.textContent="Edit title & notes";edit.onclick=()=>{const titleInput=document.createElement("input"),noteInput=document.createElement("textarea"),save=document.createElement("button"),cancel=document.createElement("button");titleInput.value=title||"Saved track";titleInput.maxLength=160;titleInput.setAttribute("aria-label","Production title");noteInput.value=notes||"";noteInput.maxLength=2000;noteInput.setAttribute("aria-label","Production notes");save.type=cancel.type="button";save.textContent="Save";cancel.textContent="Cancel";save.onclick=()=>updateSaved(slug,{title:titleInput.value.trim()||"Saved track",notes:noteInput.value.trim()});cancel.onclick=renderHistory;info.replaceChildren(titleInput,noteInput,save,cancel);};
+  if(notes){const note=document.createElement("p");note.textContent=notes;info.append(note)}
+  actions.append(button,star,edit);item.append(info,actions);el.append(item);
  }
 }
+$("library-search").addEventListener("input",renderHistory);
+$("library-filter").addEventListener("change",renderHistory);
+$("library-export").onclick=()=>{
+ const rows=history();const blob=new Blob([JSON.stringify({schema:"auraluna-catalogue-v1",productions:rows},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="auraluna-music-catalogue.json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ $("library-status").textContent="Catalogue backup requested. Audio files are not included.";
+};
+$("library-import").onchange=async()=>{
+ const input=$("library-import");try{
+ const file=input.files[0];if(!file)return;if(file.size>20*1024*1024)throw Error("Catalogue exceeds 20 MB");
+ const data=JSON.parse(await file.text());if(data.schema!=="auraluna-catalogue-v1"||!Array.isArray(data.productions))throw Error("Invalid catalogue backup");
+ const clean=data.productions.filter(x=>x&&typeof x.slug==="string"&&/^auraluna-[a-f0-9]{32}$/.test(x.slug)).map(x=>({slug:x.slug,title:typeof x.title==="string"?x.title.slice(0,160):"Saved track",notes:typeof x.notes==="string"?x.notes.slice(0,2000):"",favorite:x.favorite===true,date:typeof x.date==="string"&&Number.isFinite(Date.parse(x.date))?x.date:null,seconds:Number.isFinite(x.seconds)&&x.seconds>0?x.seconds:null,format:["mp3","wav","flac"].includes(x.format)?x.format:null,engine:["aria","fast"].includes(x.engine)?x.engine:null,composition:["independent","thematic"].includes(x.composition)?x.composition:null,variations:[1,2,3].includes(x.variations)?x.variations:null,state:terminalStates.has(x.state)?x.state:"UNVERIFIED"}));
+ const merged=new Map(history().map(x=>[x.slug,x]));let added=0;for(const x of clean)if(!merged.has(x.slug)){merged.set(x.slug,x);added++}
+ localStorage.setItem(historyKey,JSON.stringify([...merged.values()]));$("library-status").textContent=added+" productions restored. Remote audio availability must be checked.";renderHistory();
+ }catch(e){$("library-status").textContent=e.message}finally{input.value=""}
+};
 async function api(path,options={}){
  if(!key)throw Error("Enter your Auraluna access key and connect first.");
  const r=await fetch(API+path,{cache:"no-store",...options,headers:{Authorization:"Bearer "+key,...options.headers}});
@@ -154,7 +175,7 @@ async function connect(value,remember){
   if(version!==connectionVersion)return;
   deployedVersion=backendVersion;
   status(backendVersion==="V17-tuning"?"Connected · V17 custom tuning":backendVersion==="V16-nature-mixer"?"Connected · V16 nature mixer":backendVersion==="V15-composition-styles"?"Connected · V15 composition styles":backendVersion==="V14-cpu-routing"?"Connected · V14 · update Worker for composition styles":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
-  const latest=history().find(x=>x.state&&!terminalStates.has(x.state))||history()[0];if(latest){if(latest.state&&!terminalStates.has(latest.state)){pendingSlug=latest.slug;lock()}await watch(latest.slug)}
+  const latest=history().find(x=>x.state&&x.state!=="UNVERIFIED"&&!terminalStates.has(x.state))||history().find(x=>terminalStates.has(x.state));if(latest){if(latest.state&&!terminalStates.has(latest.state)){pendingSlug=latest.slug;lock()}await watch(latest.slug)}
  }catch(e){if(version!==connectionVersion)return;key="";if(e.status===401||e.status===403)forgetKey();$("credentials").hidden=false;status(e.message)}
  finally{if(version===connectionVersion)$("connect").disabled=false}
 }
