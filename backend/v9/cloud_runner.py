@@ -18,11 +18,16 @@ fast=r["engine"]=="fast"
 started_job=time.monotonic()
 print("AURALUNA STAGE: restoring acoustic assets",flush=True)
 inputs=Path("/kaggle/input")
-required=("instruments","nature","licenses","models/model.safetensors")
+# Restore only assets needed by this request. Keep all attribution records.
+categories=["licenses"]
+if r["instruments"]:categories.extend("instruments/"+name for name in r["instruments"])
+categories.extend("nature/"+name for name in r.get("nature_layers",{}))
+if not nature_only and not fast:categories.append("models/model.safetensors")
+required=tuple(categories)
 def complete(p):
     return all((p/name).exists() for name in required)
 def locate(base):
-    return sorted({p.parent.parent for p in base.rglob("model.safetensors") if p.parent.name=="models" and complete(p.parent.parent)})
+    return sorted({p.parent for p in base.rglob("licenses") if p.is_dir() and complete(p.parent)})
 print("Dataset mount entries:",[str(p) for p in inputs.iterdir()] if inputs.exists() else [],flush=True)
 sources=locate(inputs)
 if len(sources)>1:raise RuntimeError("Multiple complete asset roots: "+str(sources))
@@ -36,16 +41,28 @@ if not sources:
     unpack=scratch/"unpacked"
     unpack.mkdir(exist_ok=True)
     with tarfile.open(archives[0],"r:*") as t:
-        t.extractall(unpack,filter="data")
+        # Keep only regular files and directories under selected asset paths.
+        # Compressed archives still require sequential reads; this reduces writes and disk use.
+        def selected(member):
+            parts=Path(member.name).parts
+            if not (member.isfile() or member.isdir()) or member.name.startswith("/") or ".." in parts:return False
+            for target in required:
+                wanted=Path(target).parts
+                if any(parts[i:i+len(wanted)]==wanted for i in range(len(parts))):return True
+            return False
+        t.extractall(unpack,members=(m for m in t if selected(m)),filter="data")
+    print("Restored required asset categories:",", ".join(required),flush=True)
     sources=locate(unpack)
     if len(sources)!=1:raise RuntimeError("Archive does not contain one complete asset root: "+str(sources))
 source=sources[0]
 print("Using asset root:",source,flush=True)
 for name in ("instruments","nature","licenses","models"):
     target=root/name
-    if not target.exists():target.symlink_to(source/name,target_is_directory=True)
+    if not target.exists():
+        if (source/name).exists():target.symlink_to(source/name,target_is_directory=True)
+        else:target.mkdir(parents=True,exist_ok=True)
 
-for name in ("instruments","nature","licenses","models/model.safetensors"):
+for name in required:
     if not (root/name).exists():raise RuntimeError("Asset missing: "+name)
 engine=Path(__file__).resolve().parent
 started=time.monotonic()
