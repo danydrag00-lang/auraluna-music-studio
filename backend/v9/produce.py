@@ -46,7 +46,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":4,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":5,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -84,6 +84,22 @@ def valid(path,frames):
     try:
         info=sf.info(path);return info.frames==frames and info.samplerate==SR and info.channels==2 and info.subtype=="PCM_24"
     except Exception:return False
+def melodic_fingerprint(midi):
+    # Compare transposition-independent contours, not only byte-identical MIDI.
+    from collections import Counter
+    notes=sorted((n for track in midi.instruments if not track.is_drum for n in track.notes),key=lambda n:(n.start,-n.pitch))
+    # Extract the upper voice in short onset groups, reducing chord doubling.
+    tops={}
+    for n in notes:
+        tick=round(n.start*5)
+        tops[tick]=max(tops.get(tick,0),n.pitch)
+    pitches=[tops[t] for t in sorted(tops)]
+    intervals=[max(-12,min(12,b-a)) for a,b in zip(pitches,pitches[1:])]
+    return dict(Counter(",".join(map(str,intervals[i:i+4])) for i in range(max(0,len(intervals)-3))))
+def melodic_similarity(a,b):
+    if sum(a.values())<8 or sum(b.values())<8:return None
+    keys=a.keys()|b.keys()
+    return sum(min(a.get(k,0),b.get(k,0)) for k in keys)/sum(max(a.get(k,0),b.get(k,0)) for k in keys)
 def get_loop():
     if nature=="none":return None
     path=next((ROOT/"nature"/nature).rglob("*.wav"))
@@ -125,6 +141,14 @@ for v in range(1,a.variations+1):
                     m=pretty_midi.PrettyMIDI(str(midi))
                     signature=hashlib.sha256(json.dumps(sorted((n.pitch,round(n.start,2),round(n.end,2)) for t in m.instruments for n in t.notes)).encode()).hexdigest()
                     if any(x.get("signature")==signature for k,x in state["sections"].items() if k!=key):continue
+                    fingerprint=melodic_fingerprint(m)
+                    similarities=[melodic_similarity(fingerprint,x.get("fingerprint",{})) for k,x in state["sections"].items() if k!=key]
+                    maximum=max((x for x in similarities if x is not None),default=None)
+                    # Retry highly similar independent sections, but never reject legitimate recurring themes.
+                    if a.engine=="fast" and a.composition=="independent" and maximum is not None and maximum>.85 and attempt<2:
+                        print(f"Variation {v}: retrying similar section ({maximum:.2f})",flush=True)
+                        env["AURALUNA_MOTIF_SEED"]=str(int.from_bytes(os.urandom(8),"big"))
+                        continue
                     run([sys.executable,str(HERE/"arrange.py"),"--root",str(isolated),"--midi",str(midi),"--mood",mood,"--seconds",str(section_seconds),"--instruments",instruments,"--nature","none","--section","--gains",json.dumps(gains)],folder/"arrange.log",env)
                     source=midi.parent/"ensemble/ensemble.flac"
                     if not valid(source,section_seconds*SR):raise RuntimeError("Invalid section")
@@ -133,7 +157,7 @@ for v in range(1,a.variations+1):
                     # Section renderer already writes lossless PCM24 checkpoints.
                     shutil.move(str(source),str(temp));os.replace(temp,dest)
                     shutil.copy2(midi,folder/f"section_{i:04d}.mid")
-                    state["sections"][key]={"signature":signature,"file":str(dest.relative_to(job))}
+                    state["sections"][key]={"signature":signature,"fingerprint":fingerprint,"similarity":maximum,"file":str(dest.relative_to(job))}
                     save();break
                 except (subprocess.CalledProcessError,RuntimeError,ValueError):
                     if attempt==2:raise
@@ -218,6 +242,9 @@ for v in range(1,a.variations+1):
     quality={"status":"technical_checks_passed","decoded_seconds":decoded_frames/SR,"sample_rate":SR,"channels":2,"checkpoint_bits":24 if mood else None,"rms_dbfs":20*math.log10(max(rms,1e-12)),"sample_peak_dbfs":20*math.log10(max(decoded_peak,1e-12)),"longest_very_quiet_seconds":longest_quiet/SR,"warnings":[]}
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
     if stats["limited_samples"]>stats["samples"]*.01:quality["warnings"].append("Frequent peak limiting; review dynamics.")
+    similarities=[x["similarity"] for k,x in state["sections"].items() if k.startswith(f"{v}:") and x.get("similarity") is not None]
+    quality["composition_analysis"]={"method":"MIDI upper-voice interval 4-gram weighted Jaccard (heuristic)","sections":count,"max_similarity":max(similarities,default=None),"comparisons_available":len(similarities),"scope":"MIDI only; does not measure recorded phrases, nature loops or perceived audio repetition"}
+    if a.engine=="fast" and a.composition=="independent" and any(x>.85 for x in similarities):quality["warnings"].append("Some MIDI sections remain highly similar; audition for repetition.")
     os.replace(temp,final)
     records=[]
     for f in (ROOT/"licenses").glob("*.json"):
