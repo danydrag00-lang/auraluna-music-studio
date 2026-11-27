@@ -56,7 +56,7 @@ def normalize(r):
     seconds=integer("seconds",seconds,15,43200)
     variations=integer("variations",r.get("variations",1),1,3)
     fmt=r.get("format","mp3")
-    if fmt not in ("mp3","flac","wav"):raise ValueError("Invalid format")
+    if fmt not in ("mp3","m4a","flac","wav"):raise ValueError("Invalid format")
     job=r.get("job")
     if not isinstance(job,str) or not re.fullmatch(r"[A-Za-z0-9]{1,48}",job):raise ValueError("Job ID must be 1–48 ASCII letters or digits")
     gains=r.get("gains",{})
