@@ -79,7 +79,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V31-archive-guard",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V32-smooth-join",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -91,7 +91,8 @@ export default {async fetch(req,env){
  try{
   if(url.pathname==="/test-kaggle"&&req.method==="GET"){await call("ListKernels",{pageSize:1});return reply({connected:true})}
   if(url.pathname==="/join"&&req.method==="POST"){
-    const body=await req.json(),parts=body?.parts,format=body?.format;
+    const body=await req.json(),parts=body?.parts,format=body?.format,mode=body?.mode??"copy",bitrate=body?.bitrate??(format==="mp3"?"320k":"256k");
+    if(!["copy","smooth"].includes(mode)||!(format==="mp3"?["320k"]:["192k","256k"]).includes(bitrate))return reply({error:"Invalid assembly mode or quality"},400);
     if(!["mp3","m4a"].includes(format)||!Array.isArray(parts)||parts.length<2||parts.length>12||new Set(parts).size!==parts.length||parts.some(p=>typeof p!=="string"||!/^auraluna-[a-f0-9]{32}$/.test(p)))return reply({error:"Invalid join plan"},400);
     const job=crypto.randomUUID().replaceAll("-",""),slug="auraluna-"+job;
     const source=[
@@ -101,7 +102,7 @@ export default {async fetch(req,env){
       "engine.parent.mkdir(parents=True,exist_ok=True)",
       "urllib.request.urlretrieve("+JSON.stringify(BASE+"join_parts.py")+",engine)",
       "request=engine.with_name('join.json')",
-      "request.write_text("+JSON.stringify(JSON.stringify({parts,format})) +")",
+      "request.write_text("+JSON.stringify(JSON.stringify({parts,format,mode,bitrate})) +")",
       "subprocess.run([sys.executable,str(engine),str(request)],check=True)"
     ].join("\n");
     const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:slug.replaceAll("-"," "),text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:false,enableTpu:false,enableInternet:true,datasetDataSources:[],kernelDataSources:parts.map(p=>env.KAGGLE_USERNAME+"/"+p),competitionDataSources:[],modelDataSources:[]});

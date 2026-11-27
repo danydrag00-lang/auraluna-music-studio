@@ -5,6 +5,7 @@ import soundfile as sf
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"backend/v9"))
 from audit_assets import audit
 from request import normalize
+from join_parts import smooth_filter
 class Checks(unittest.TestCase):
     def test_request(self):
         r=normalize(dict(job="Test01",instruments=["flute"],nature_layers={},seconds=60,engine="studio",format="flac"))
@@ -21,6 +22,11 @@ class Checks(unittest.TestCase):
             out=audit(root,[record,record,{**record,"license":"CC-BY-NC-4.0"},{**record,"path":"../missing.wav"}])
             self.assertEqual(out["accepted_count"],1)
             self.assertEqual(out["rejected_count"],3)
+    def test_smooth_join_graph(self):
+        graph,last=smooth_filter(12,12)
+        self.assertEqual(graph.count("acrossfade=d=12:c1=tri:c2=tri"),11)
+        self.assertEqual(last,"[mix11]")
+        with self.assertRaises(ValueError):smooth_filter(13)
     def test_pcm24_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/"test.flac"
