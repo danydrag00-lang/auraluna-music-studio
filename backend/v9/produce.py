@@ -150,6 +150,8 @@ for v in range(1,a.variations+1):
             if a.engine=="fast":env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(v,i,"performance"))
             env.update(AURALUNA_SECTION=str(i),AURALUNA_SECTIONS=str(count),AURALUNA_MOTIF_SEED=str(int(hashlib.sha256((creative_seed+":"+str(v)+(":"+str(i) if a.composition=="independent" else "")).encode()).hexdigest()[:16],16)),AURALUNA_COMPOSITION=a.composition)
             for attempt in range(3):
+                if a.engine=="fast":
+                    env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(v,i,attempt,"performance"))
                 try:
                     run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds),"--midi-only","--engine",a.engine],folder/"compose.log",env)
                     midi=max((isolated/"productions").rglob("arrangement.mid"),key=lambda p:p.stat().st_mtime)
@@ -164,7 +166,7 @@ for v in range(1,a.variations+1):
                     # Retry highly similar independent sections, but never reject legitimate recurring themes.
                     if a.engine=="fast" and a.composition=="independent" and maximum is not None and maximum>.85 and attempt<2:
                         print(f"Variation {v}: retrying similar section ({maximum:.2f})",flush=True)
-                        env["AURALUNA_MOTIF_SEED"]=str(seed_for(v,i,retry,"motif"))
+                        env["AURALUNA_MOTIF_SEED"]=str(seed_for(v,i,attempt+1,"motif"))
                         continue
                     run([sys.executable,str(HERE/"arrange.py"),"--root",str(isolated),"--midi",str(midi),"--mood",mood,"--seconds",str(section_seconds),"--instruments",instruments,"--nature","none","--section","--gains",json.dumps(gains)],folder/"arrange.log",env)
                     ensemble=midi.parent/"ensemble"
