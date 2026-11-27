@@ -26,6 +26,7 @@ PRESETS={
 }
 p=argparse.ArgumentParser()
 p.add_argument("--preset",choices=PRESETS,default="luxury_spa")
+p.add_argument("--tuning",choices=["standard","a432","c528"],default="standard")
 p.add_argument("--composition",choices=["independent","thematic"],default="independent")
 p.add_argument("--engine",choices=["aria","fast"],default="aria")
 p.add_argument("--seconds",type=int,default=120)
@@ -47,7 +48,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":10,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":11,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -65,6 +66,11 @@ if a.nature is not None:nature=a.nature
 layers=json.loads(a.nature_layers) if a.nature_layers is not None else ({nature:0} if nature!="none" else {})
 if not isinstance(layers,dict) or any(k not in {"rain","river","ocean","forest"} or type(v) not in (int,float) or not math.isfinite(v) or not -30<=v<=6 for k,v in layers.items()):p.error("Invalid nature mixer")
 if not mood and not layers:p.error("Select at least one sound source")
+if not mood and a.tuning!="standard":p.error("Tuning requires instruments")
+pitch_ratio={"standard":1.0,"a432":432/440,"c528":528/(440*2**(3/12))}[a.tuning]
+if pitch_ratio!=1:
+    filters=subprocess.run(["ffmpeg","-hide_banner","-filters"],capture_output=True,text=True,check=True).stdout
+    if "rubberband" not in filters:raise RuntimeError("High-quality pitch-shifting filter unavailable; no lower-quality fallback used")
 import shutil
 # Conservative disk budget: uncompressed 24-bit checkpoints plus final output, with 512 MiB scratch allowance.
 bytes_per_second={"mp3":40000,"flac":288000,"wav":288000}[a.format]
@@ -162,6 +168,13 @@ for v in range(1,a.variations+1):
                     if any(not rendered.get(name,0) for name in expected):raise RuntimeError("Missing instrument in rendered section")
                     source=ensemble/"ensemble.flac"
                     if not valid(source,section_seconds*SR):raise RuntimeError("Invalid section")
+                    if pitch_ratio!=1:
+                        shifted=ensemble/"tuned.flac"
+                        frames=section_seconds*SR
+                        filter_spec=f"rubberband=pitch={pitch_ratio:.12f}:tempo=1:pitchq=quality:channels=together,apad=whole_len={frames},atrim=end_sample={frames}"
+                        run(["ffmpeg","-y","-loglevel","error","-i",str(source),"-af",filter_spec,"-c:a","flac","-sample_fmt","s32","-bits_per_raw_sample","24",str(shifted)],folder/"tuning.log")
+                        if not valid(shifted,frames):raise RuntimeError("Invalid tuned section")
+                        source=shifted
                     import shutil
                     temp=dest.with_suffix(".part")
                     # Section renderer already writes lossless PCM24 checkpoints.
@@ -298,6 +311,7 @@ for v in range(1,a.variations+1):
     if matches and mood and a.composition=="independent":quality["warnings"].append("Audio analysis found similar spectral-change passages; listen at the reported timestamps.")
     quality["instrument_coverage"]={name:sum(int(x.get("instrument_events",{}).get(name,0)>0) for k,x in state["sections"].items() if k.startswith(f"{v}:")) for name in (instruments.split(",") if instruments else [])}
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
+    quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
     quality["nature_layers_db"]=layers
     quality["nature_mix_normalization"]=layer_scale
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
