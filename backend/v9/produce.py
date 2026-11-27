@@ -255,18 +255,33 @@ for v in range(1,a.variations+1):
     frequencies=np.fft.rfftfreq(SR,1/SR)
     band_edges=np.searchsorted(frequencies,bands)
     window=np.hanning(SR).astype(np.float32)
-    # libsndfile does not generally decode AAC/M4A. Decode to a temporary
-    # lossless PCM file with FFmpeg and verify the actual encoded result.
-    validation_path=temp
-    if a.format=="m4a":
-        validation_path=folder/"validation.part.wav"
-        # RF64 permits extended audio above the ordinary WAV size limit.
-        if shutil.disk_usage(folder).free<total*8+128*1024**2:raise RuntimeError("Insufficient disk for AAC validation")
-        run(["ffmpeg","-y","-loglevel","error","-i",str(temp),"-c:a","pcm_f32le","-rf64","auto",str(validation_path)],folder/"export.log")
-    with sf.SoundFile(validation_path) as check:
-        if check.samplerate!=SR or check.channels!=2:raise RuntimeError("Incorrect export sample rate or channels")
-        if a.format in ("flac","wav") and check.subtype!="PCM_24":raise RuntimeError("Incorrect lossless export precision")
-        for block in check.blocks(blocksize=SR,dtype="float32",always_2d=True):
+    # Stream AAC decoding directly into validation to avoid a huge PCM scratch file.
+    @contextmanager
+    def decoded_audio():
+        if a.format!="m4a":
+            with sf.SoundFile(temp) as check:
+                if check.samplerate!=SR or check.channels!=2:raise RuntimeError("Incorrect export sample rate or channels")
+                if a.format in ("flac","wav") and check.subtype!="PCM_24":raise RuntimeError("Incorrect lossless export precision")
+                yield check.blocks(blocksize=SR,dtype="float32",always_2d=True)
+            return
+        info=json.loads(subprocess.check_output(["ffprobe","-v","error","-select_streams","a:0","-show_entries","stream=codec_name,sample_rate,channels","-of","json",str(temp)]))["streams"][0]
+        if info["codec_name"]!="aac" or int(info["sample_rate"])!=SR or info["channels"]!=2:raise RuntimeError("Incorrect AAC export format")
+        with (folder/"export.log").open("ab") as log:
+            proc=subprocess.Popen(["ffmpeg","-v","error","-i",str(temp),"-map","0:a:0","-f","f32le","-c:a","pcm_f32le","pipe:1"],stdout=subprocess.PIPE,stderr=log)
+            def blocks():
+                while True:
+                    raw=proc.stdout.read(SR*8)
+                    if not raw:break
+                    if len(raw)%8:raise RuntimeError("Truncated PCM frame")
+                    yield np.frombuffer(raw,dtype="<f4").reshape(-1,2)
+            try:
+                yield blocks()
+                if proc.wait()!=0:raise RuntimeError("AAC decoding failed")
+            finally:
+                if proc.poll() is None:proc.kill();proc.wait()
+                proc.stdout.close()
+    with decoded_audio() as blocks:
+        for block in blocks:
             if not np.isfinite(block).all():raise RuntimeError("Non-finite decoded samples")
             decoded_frames+=len(block)
             energy=float(np.sum(block*block,dtype=np.float64))
@@ -280,7 +295,6 @@ for v in range(1,a.variations+1):
             if energy/max(1,block.size)<1e-8:
                 quiet_run+=len(block);longest_quiet=max(longest_quiet,quiet_run)
             else:quiet_run=0
-    if a.format=="m4a":validation_path.unlink()
     tolerance=SR//10 if a.format in ("mp3","m4a") else 0
     if abs(decoded_frames-total)>tolerance:raise RuntimeError("Encoded duration does not match request")
     rms=math.sqrt(decoded_energy/max(1,decoded_frames*2))
