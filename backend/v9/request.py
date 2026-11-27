@@ -59,9 +59,11 @@ def normalize(r):
     if not isinstance(gains,dict) or any(k not in instruments or type(v) not in (int,float) or not math.isfinite(v) or not -60<=v<=12 for k,v in gains.items()):raise ValueError("Invalid gain offsets")
     engine=r.get("engine","aria")
     if engine not in ("aria","fast"):raise ValueError("Invalid composition engine")
-    return dict(engine=engine,preset=preset,instruments=instruments,nature=nature,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
+    composition=r.get("composition","independent")
+    if composition not in ("independent","thematic"):raise ValueError("Invalid composition style")
+    return dict(composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
 def command(r,budget):
-    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria")]
+    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent")]
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("request",type=Path)
