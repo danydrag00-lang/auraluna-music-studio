@@ -1,0 +1,84 @@
+const ORIGIN="https://danydrag00-lang.github.io";
+const API="https://api.kaggle.com/v1/kernels.KernelsApiService/";
+const BASE="https://raw.githubusercontent.com/danydrag00-lang/auraluna-music-studio/main/backend/v9/";
+const presets=["luxury_spa","deep_sleep","meditation","study_focus","emotional_relaxation","peaceful_piano","yoga_zen","indian_meditation","rain_sleep","ocean_sleep","forest_relaxation","river_relaxation"];
+const instruments=["felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls"];
+const nature=["none","rain","river","ocean","forest"];
+function validate(r){
+ if(!r||typeof r!=="object"||Array.isArray(r))throw Error("Invalid request");
+ const out={job:crypto.randomUUID().replaceAll("-",""),seconds:r.seconds??120,variations:r.variations??1,format:r.format??"mp3",prompt:r.prompt??""};
+ if(!Number.isInteger(out.seconds)||out.seconds<15||out.seconds>300)throw Error("Initial remote testing supports 15–300 seconds.");
+ if(!Number.isInteger(out.variations)||out.variations!==1)throw Error("Initial remote testing supports one variation.");
+ if(!["mp3","flac","wav"].includes(out.format)||typeof out.prompt!=="string"||out.prompt.length>2000)throw Error("Invalid format or prompt");
+ if(r.preset!==undefined){if(!presets.includes(r.preset))throw Error("Invalid preset");out.preset=r.preset}
+ if(r.instruments!==undefined){if(!Array.isArray(r.instruments)||r.instruments.some(x=>!instruments.includes(x))||new Set(r.instruments).size!==r.instruments.length)throw Error("Invalid instruments");out.instruments=r.instruments}
+ if(r.nature!==undefined){if(!nature.includes(r.nature))throw Error("Invalid ambience");out.nature=r.nature}
+ if(r.gains!==undefined){if(!r.gains||typeof r.gains!=="object"||Array.isArray(r.gains)||Object.entries(r.gains).some(([k,v])=>!out.instruments?.includes(k)||typeof v!=="number"||!Number.isFinite(v)||v< -60||v>12))throw Error("Invalid gains");out.gains=r.gains}
+ if(out.instruments?.length===0&&out.nature==="none")throw Error("Choose a sound source");
+ return out;
+}
+export default {async fetch(req,env){
+ const headers={"Access-Control-Allow-Origin":ORIGIN,"Access-Control-Allow-Methods":"GET, POST, OPTIONS","Access-Control-Allow-Headers":"Authorization, Content-Type","Cache-Control":"no-store","Content-Type":"application/json"};
+ const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
+ if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
+ const url=new URL(req.url);
+ const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V9-cloud-beta",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET)});
+ if(!configured)return reply({error:"Credentials missing"},503);
+ if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
+ async function call(method,data){
+   const response=await fetch(API+method,{method:"POST",redirect:"manual",headers:{Authorization:"Bearer "+env.KAGGLE_API_TOKEN,"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(data)});
+   if(!response.ok)throw Error("Kaggle "+method+" HTTP "+response.status);
+   if(!(response.headers.get("content-type")||"").includes("json"))throw Error("Kaggle returned unexpected content");
+   const result=await response.json();if(result.error)throw Error("Kaggle "+method+" rejected request");return result;
+ }
+ try{
+  if(url.pathname==="/test-kaggle"&&req.method==="GET"){await call("ListKernels",{pageSize:1});return reply({connected:true})}
+  if(url.pathname==="/generate"&&req.method==="POST"){
+    if(!env.KAGGLE_DATASET||!/^[-a-zA-Z0-9_]+\/[-a-zA-Z0-9_]+$/.test(env.KAGGLE_DATASET))return reply({error:"Configure KAGGLE_DATASET first"},503);
+    let r;try{r=validate(await req.json())}catch(e){return reply({error:e.message},400)}
+    const slug="auraluna-"+r.job,title=slug.replaceAll("-"," ");
+    const payload=JSON.stringify(JSON.stringify(r));
+    const source=[
+      "import json, sys, subprocess, urllib.request",
+      "from pathlib import Path",
+      "engine = Path('/kaggle/temp/v9-engine')",
+      "engine.mkdir(parents=True, exist_ok=True)",
+      "for name in ['bootstrap.py','compose_preview.py','arrange.py','produce.py','request.py','cloud_runner.py']:",
+      "    urllib.request.urlretrieve("+JSON.stringify(BASE)+" + name, engine / name)",
+      "request = engine / 'job.json'",
+      "request.write_text("+payload+")",
+      "subprocess.run([sys.executable, str(engine / 'cloud_runner.py'), str(request)], check=True)"
+    ].join("\n");
+    // A script kernel keeps submitted source small; no credentials in notebook source.
+    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:true,machineShape:"NvidiaTeslaT4",enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
+    if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
+    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted"},202);
+  }
+  const slug=url.searchParams.get("slug")||"";
+  if(!/^auraluna-[a-f0-9]{32}$/.test(slug))return reply({error:"Invalid production slug"},400);
+  const query={userName:env.KAGGLE_USERNAME,kernelSlug:slug};
+  if(url.pathname==="/status"&&req.method==="GET"){
+    const result=await call("GetKernelSessionStatus",query);
+    return reply({status:result.status??"unknown",failureMessage:result.failureMessage??""});
+  }
+  if(url.pathname==="/outputs"&&req.method==="GET"){
+    const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
+    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|wav|flac)|licences\.json|completed\.json)$/.test(f.fileName||""));
+    // Return names only; signed output URLs must be requested separately.
+    return reply({files:files.map(f=>({name:f.fileName}))});
+  }
+  if(url.pathname==="/download"&&req.method==="GET"){
+    const name=url.searchParams.get("file")||"";
+    if(!/^results\/variation_[1-3]_(music\.(mp3|wav|flac)|licences\.json|completed\.json)$/.test(name))return reply({error:"Invalid output file"},400);
+    const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
+    const file=(result.files||[]).find(f=>f.fileName===name);
+    if(!file?.url)return reply({error:"Output not available"},404);
+    const signed=new URL(file.url);
+    // Never send Kaggle credentials to a storage URL.
+    if(signed.protocol!=="https:"||!(signed.hostname==="storage.googleapis.com"||signed.hostname.endsWith(".storage.googleapis.com")))return reply({error:"Unexpected output storage host"},502);
+    return reply({url:signed.href,name:name.split("/").pop()});
+  }
+  return reply({error:"Endpoint not found"},404);
+ }catch(e){return reply({error:e.message},502)}
+}};
