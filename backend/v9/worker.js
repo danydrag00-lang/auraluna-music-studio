@@ -60,7 +60,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V13-long-fast",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET)});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V14-cpu-routing",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -75,6 +75,8 @@ export default {async fetch(req,env){
     if(!env.KAGGLE_DATASET||!/^[-a-zA-Z0-9_]+\/[-a-zA-Z0-9_]+$/.test(env.KAGGLE_DATASET))return reply({error:"Configure KAGGLE_DATASET first"},503);
     let r;try{r=validate(await req.json())}catch(e){return reply({error:e.message},400)}
     const slug="auraluna-"+r.job,title=slug.replaceAll("-"," ");
+    const natureOnly=Array.isArray(r.instruments)&&r.instruments.length===0&&nature.includes(r.nature)&&r.nature!=="none";
+    const needsGpu=r.engine==="aria"&&!natureOnly;
     const payload=JSON.stringify(JSON.stringify(r));
     const source=[
       "import json, sys, subprocess, urllib.request",
@@ -88,9 +90,9 @@ export default {async fetch(req,env){
       "subprocess.run([sys.executable, str(engine / 'cloud_runner.py'), str(request)], check=True)"
     ].join("\n");
     // A script kernel keeps submitted source small; no credentials in notebook source.
-    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:true,machineShape:"NvidiaTeslaT4",enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
+    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
-    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted"},202);
+    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU"},202);
   }
   const slug=url.searchParams.get("slug")||"";
   if(!/^auraluna-[a-f0-9]{32}$/.test(slug))return reply({error:"Invalid production slug"},400);
