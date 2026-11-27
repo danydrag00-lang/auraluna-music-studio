@@ -47,7 +47,7 @@ function remember(slug){try{localStorage.setItem(historyKey,JSON.stringify([{slu
 function renderHistory(){const el=$("history");el.replaceChildren();for(const {slug,title,date} of history()){const b=document.createElement("button");b.type="button";b.className="v9-secondary";b.textContent=(title||"Saved track")+(date?" · "+new Date(date).toLocaleString():"");b.onclick=()=>watch(slug);el.append(b)}}
 async function api(path,options={}){
  if(!key)throw Error("Enter your Auraluna access key and connect first.");
- const r=await fetch(API+path,{...options,headers:{Authorization:"Bearer "+key,...options.headers}});
+ const r=await fetch(API+path,{cache:"no-store",...options,headers:{Authorization:"Bearer "+key,...options.headers}});
  const d=await r.json();if(!r.ok){const e=new Error(d.error||"Backend HTTP "+r.status);e.status=r.status;throw e;}return d;
 }
 function status(s){$("cloud-status").textContent=s}
@@ -75,11 +75,11 @@ $("connect").onclick=()=>connect($("access-key").value.trim(),$("remember-device
 $("disconnect").onclick=()=>{++connectionVersion;forgetKey();key="";clearTimeout(timer);active="";$("credentials").hidden=false;$("connect").disabled=false;$("generate").disabled=true;$("generate").textContent="Generate Music";status("Disconnected");busy=false;$("players").replaceChildren()};
 async function addFile(slug,name){
  const row=document.createElement("article");row.className="v9-result";
- const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("a"),message=document.createElement("p"),retry=document.createElement("button");
+ const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("button"),message=document.createElement("p"),retry=document.createElement("button");
  h.textContent=history().find(x=>x.slug===slug)?.title||"Your generated music";
  meta.textContent=name.split(".").pop().toUpperCase()+" · Original production";
  player.controls=true;player.preload="metadata";player.style.width="100%";player.hidden=true;
- download.textContent="Download music";download.className="v9-download";download.target="_blank";download.rel="noopener noreferrer";download.hidden=true;
+ download.type="button";download.textContent="Download music";download.className="v9-download";download.hidden=false;
  message.textContent="Preparing your music…";message.setAttribute("role","status");
  retry.type="button";retry.className="v9-secondary";retry.textContent="Retry audio";retry.hidden=true;
  row.append(h,meta,message,player,download,retry);$("players").append(row);
@@ -87,8 +87,28 @@ async function addFile(slug,name){
   const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));
   if(active!==slug)return;
   const u=new URL(d.url);if(u.protocol!=="https:")throw Error("Invalid output URL");
-  player.src=u.href;player.hidden=false;download.href=u.href;download.download=d.name||name.split("/").pop();download.hidden=false;message.textContent="";
+  player.src=u.href;player.hidden=false;message.textContent="";
  }catch(e){message.textContent=e.message;retry.hidden=false}}
+ download.onclick=async()=>{
+  download.disabled=true;download.textContent="Preparing download…";
+  row.querySelector(".v9-direct-link")?.remove();
+  try{
+   const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));
+   const u=new URL(d.url);if(u.protocol!=="https:")throw Error("Invalid output URL");
+   try{
+    const response=await fetch(u.href,{cache:"no-store",credentials:"omit"});
+    if(!response.ok)throw Error("Storage HTTP "+response.status);
+    const blob=await response.blob();if(!blob.size)throw Error("Empty music file");
+    const object=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=object;a.download=d.name||name.split("/").pop();document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(object),60000);message.textContent="Download requested.";
+   }catch(e){
+    const a=document.createElement("a");a.className="v9-direct-link";a.href=u.href;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open fresh download link";a.download=d.name||name.split("/").pop();
+    row.append(a);message.textContent="Browser could not fetch the file directly. Use the fresh link below to open or save your music.";
+   }
+  }catch(e){message.textContent="Download unavailable: "+e.message;retry.hidden=false}
+  finally{download.disabled=false;download.textContent="Download music"}
+ };
  retry.onclick=load;player.onerror=()=>{message.textContent="Audio unavailable. Refresh the audio link.";retry.hidden=false};
  await load();
 }
@@ -97,7 +117,7 @@ function addReports(slug,files){
  for(const {name} of files.filter(f=>f.name.endsWith(".json"))){const b=document.createElement("button");b.type="button";b.className="v9-secondary";b.textContent=name.includes("licences")?"Licence information":"Production information";b.onclick=async()=>{try{const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));const a=document.createElement("a");a.href=d.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open report";b.after(a)}catch(e){status(e.message)}};details.append(b)}$("players").append(details);
 }
 async function watch(slug){if(!key){status("Connect first.");return}clearTimeout(timer);active=slug;remember(slug);pendingMeta=null;$("players").replaceChildren();attempt=0;await poll(slug)}
-async function poll(slug){if(active!==slug||!key)return;try{const d=await api("/status?slug="+encodeURIComponent(slug));if(active!==slug)return;const state=String(d.status).toUpperCase();status((state==="RUNNING"?"Creating your music":state==="QUEUED"?"Waiting for a GPU":state)+(d.failureMessage?" — "+d.failureMessage:""));if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)){const out=await api("/outputs?slug="+encodeURIComponent(slug));if(active!==slug)return;const files=out.files||[],audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name));for(const f of audio)await addFile(slug,f.name);if(active!==slug)return;if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);status(audio.length?"Your music is ready.":"Complete; no audio listed yet.");unlock();return}if(["ERROR","FAILED","CANCELLED","CANCELED"].includes(state)){unlock();return}attempt=0;timer=setTimeout(()=>poll(slug),15000)}catch(e){status(e.message);if(++attempt<3)timer=setTimeout(()=>poll(slug),20000);else unlock()}}
+async function poll(slug){if(active!==slug||!key)return;try{const d=await api("/status?slug="+encodeURIComponent(slug));if(active!==slug)return;const state=String(d.status).toUpperCase();status((state==="RUNNING"?"Creating your music":state==="QUEUED"?"Waiting for a GPU":state)+(d.failureMessage?" — "+d.failureMessage:""));if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)){const out=await api("/outputs?slug="+encodeURIComponent(slug));if(active!==slug)return;const files=out.files||[],audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name));for(const f of audio)await addFile(slug,f.name);if(active!==slug)return;if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);status(audio.length?"Production completed.":"Complete; no audio listed yet.");unlock();return}if(["ERROR","FAILED","CANCELLED","CANCELED"].includes(state)){unlock();return}attempt=0;timer=setTimeout(()=>poll(slug),15000)}catch(e){status(e.message);if(++attempt<3)timer=setTimeout(()=>poll(slug),20000);else unlock()}}
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
 $("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";status("Submitting private Kaggle production…");const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date().toISOString()};await watch(d.slug)}catch(e){status(e.message);unlock()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
