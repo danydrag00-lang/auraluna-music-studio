@@ -17,13 +17,44 @@ function validate(r){
  if(out.instruments?.length===0&&out.nature==="none")throw Error("Choose a sound source");
  return out;
 }
+// Kaggle output links can use Kaggle download gateways or Google storage.
+function trustedOutput(value){
+ const u=new URL(value);
+ const h=u.hostname.toLowerCase();
+ const allowed=h==="storage.googleapis.com"||h.endsWith(".storage.googleapis.com")||
+   h==="storage.cloud.google.com"||h==="kaggle.com"||h==="www.kaggle.com"||h==="api.kaggle.com"||
+   h==="kaggleusercontent.com"||h.endsWith(".kaggleusercontent.com");
+ if(u.protocol!=="https:"||u.username||u.password||u.port||!allowed)
+   throw Error("Unsupported output storage host: "+h);
+ return u;
+}
+async function fetchOutput(u){
+ // Follow only validated redirects, never forwarding API credentials.
+ for(let i=0;i<6;i++){
+  const r=await fetch(u.href,{method:"GET",redirect:"manual"});
+  if([301,302,303,307,308].includes(r.status)){
+   const next=r.headers.get("Location");
+   if(!next)throw Error("Storage redirect missing destination");
+   if(r.body)await r.body.cancel();
+   u=trustedOutput(new URL(next,u).href);
+   continue;
+  }
+  if(!r.ok)throw Error("Output storage HTTP "+r.status);
+  if((r.headers.get("content-type")||"").includes("text/html")){
+   if(r.body)await r.body.cancel();
+   throw Error("Storage returned a web page instead of a file");
+  }
+  return r;
+ }
+ throw Error("Too many output redirects");
+}
 export default {async fetch(req,env){
  const headers={"Access-Control-Allow-Origin":ORIGIN,"Access-Control-Allow-Methods":"GET, POST, OPTIONS","Access-Control-Allow-Headers":"Authorization, Content-Type","Cache-Control":"no-store","Content-Type":"application/json"};
  const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V9-cloud-beta",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET)});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V10-download-fix",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET)});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -68,16 +99,21 @@ export default {async fetch(req,env){
     // Return names only; signed output URLs must be requested separately.
     return reply({files:files.map(f=>({name:f.fileName}))});
   }
-  if(url.pathname==="/download"&&req.method==="GET"){
+  if(["/download","/file"].includes(url.pathname)&&req.method==="GET"){
     const name=url.searchParams.get("file")||"";
     if(!/^results\/variation_[1-3]_(music\.(mp3|wav|flac)|licences\.json|completed\.json)$/.test(name))return reply({error:"Invalid output file"},400);
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
     const file=(result.files||[]).find(f=>f.fileName===name);
     if(!file?.url)return reply({error:"Output not available"},404);
-    const signed=new URL(file.url);
-    // Never send Kaggle credentials to a storage URL.
-    if(signed.protocol!=="https:"||!(signed.hostname==="storage.googleapis.com"||signed.hostname.endsWith(".storage.googleapis.com")))return reply({error:"Unexpected output storage host"},502);
-    return reply({url:signed.href,name:name.split("/").pop()});
+    const signed=trustedOutput(file.url);
+    const filename=name.split("/").pop();
+    if(url.pathname==="/file"){
+     const r=await fetchOutput(signed);
+     const type=filename.endsWith(".mp3")?"audio/mpeg":filename.endsWith(".wav")?"audio/wav":filename.endsWith(".flac")?"audio/flac":"application/json";
+     const outHeaders={...headers,"Content-Type":type,"Content-Disposition":'attachment; filename="'+filename+'"',"X-Content-Type-Options":"nosniff"};
+     return new Response(r.body,{status:200,headers:outHeaders});
+    }
+    return reply({url:signed.href,name:filename});
   }
   return reply({error:"Endpoint not found"},404);
  }catch(e){return reply({error:e.message},502)}
