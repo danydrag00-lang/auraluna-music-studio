@@ -56,7 +56,7 @@ def seed_for(*parts):return int(hashlib.sha256(":".join(map(str,(creative_seed,*
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":21,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":22,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -273,7 +273,20 @@ for v in range(1,a.variations+1):
         source_lufs=float(loud.group(1));source_peak=float(peak.group(1))
         gain=min(12.0,-16.0-source_lufs,-2.0-source_peak)
         normalization={"target_lufs":-16.0,"input_lufs":source_lufs,"input_true_peak_dbtp":source_peak,"applied_gain_db":gain,"pre_encode_true_peak_budget_dbtp":-2.0,"peak_constrained":gain<(-16.0-source_lufs)-0.05}
-        run(["ffmpeg","-y","-loglevel","error","-i",str(intermediate),"-af",f"volume={gain:.6f}dB",*codec,str(temp)],folder/"export.log")
+        run(["ffmpeg","-y","-loglevel","error","-i",str(intermediate),"-af",f"volume={gain:.6f}dB,aresample=192000,alimiter=limit=0.794328:attack=5:release=100:level=false:latency=true,aresample=48000",*codec,str(temp)],folder/"export.log")
+        # Keep lossless source until decoded true-peak validation passes.
+    # For YouTube, verify codec overshoot and retry from lossless source if necessary.
+    if normalization is not None:
+        for attempt in range(3):
+            check=subprocess.run(["ffmpeg","-hide_banner","-nostats","-v","info","-i",str(temp),"-af","ebur128=peak=true:framelog=verbose","-f","null","-"],capture_output=True,text=True,check=True)
+            match=re.search(r"Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS",check.stderr.rsplit("Summary:",1)[-1])
+            if not match:raise RuntimeError("Cannot verify true peak")
+            tp=float(match.group(1))
+            if tp<=-1.0:break
+            if attempt==2:raise RuntimeError("Encoded audio exceeds true-peak ceiling after retries")
+            gain-=tp+1.5
+            run(["ffmpeg","-y","-loglevel","error","-i",str(intermediate),"-af",f"volume={gain:.6f}dB,aresample=192000,alimiter=limit=0.794328:attack=5:release=100:level=false:latency=true,aresample=48000",*codec,str(temp)],folder/"export.log")
+        normalization.update(applied_gain_db=gain,verified_true_peak_dbtp=tp,limiter_oversampling=4,encoding_attempts=attempt+1)
         intermediate.unlink()
     # Verify the encoded audio by decoding it in bounded blocks; never load an hour into RAM.
     decoded_frames=0; decoded_peak=0.0; decoded_energy=0.0; quiet_run=0; longest_quiet=0
@@ -382,7 +395,7 @@ for v in range(1,a.variations+1):
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
     quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
     quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":(192 if a.aac_mode=="balanced" else 256) if a.format=="m4a" and a.aac_mode!="vbr" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
-    quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; YouTube additionally uses peak-constrained constant-gain normalization; no dedicated true-peak limiter."}
+    quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; YouTube additionally uses peak-constrained constant-gain normalization; YouTube uses 4x oversampled limiting and decoded peak verification."}
     if normalization is not None:
         quality["normalization"]=normalization
         if normalization["peak_constrained"]:quality["warnings"].append("Loudness target limited by peak headroom or maximum gain; dynamics preserved.")
