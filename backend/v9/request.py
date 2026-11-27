@@ -68,9 +68,12 @@ def normalize(r):
     tuning=r.get("tuning","standard")
     if tuning not in ("standard","a432","c528"):raise ValueError("Invalid tuning")
     if not instruments and tuning!="standard":raise ValueError("Tuning requires instruments")
-    return dict(tuning=tuning,composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,nature_layers=layers,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
+    aac_mode=r.get("aac_mode","premium")
+    if aac_mode not in ("premium","vbr"):raise ValueError("Invalid AAC quality mode")
+    if fmt!="m4a":aac_mode="premium"
+    return dict(aac_mode=aac_mode,tuning=tuning,composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,nature_layers=layers,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
 def command(r,budget):
-    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--nature-layers",json.dumps(r["nature_layers"],separators=(",",":")),"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent"),"--tuning",r.get("tuning","standard")]
+    return [sys.executable,str(Path(__file__).with_name("produce.py")),"--preset",r["preset"],"--instruments",",".join(r["instruments"]),"--nature",r["nature"],"--nature-layers",json.dumps(r["nature_layers"],separators=(",",":")),"--seconds",str(r["seconds"]),"--variations",str(r["variations"]),"--format",r["format"],"--job",r["job"],"--gains",json.dumps(r["gains"],separators=(",",":")),"--max-sections",str(budget),"--engine",r.get("engine","aria"),"--composition",r.get("composition","independent"),"--tuning",r.get("tuning","standard"),"--aac-mode",r.get("aac_mode","premium")]
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("request",type=Path)
