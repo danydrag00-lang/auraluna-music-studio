@@ -46,7 +46,7 @@ job_id=a.job or uuid.uuid4().hex[:12]
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":6,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":7,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -102,7 +102,9 @@ def melodic_similarity(a,b):
     return sum(min(a.get(k,0),b.get(k,0)) for k in keys)/sum(max(a.get(k,0),b.get(k,0)) for k in keys)
 def get_loop():
     if nature=="none":return None
-    path=next((ROOT/"nature"/nature).rglob("*.wav"))
+    candidates=sorted((ROOT/"nature"/nature).rglob("*.wav"))
+    if not candidates:raise RuntimeError("Missing nature recording: "+nature)
+    path=candidates[int(hashlib.sha256((job_id+":"+str(v)+":"+nature).encode()).hexdigest(),16)%len(candidates)]
     x,s=sf.read(path,dtype="float32",always_2d=True)
     if s!=SR:
         g=math.gcd(s,SR);x=resample_poly(x,SR//g,s//g,axis=0)
@@ -114,7 +116,8 @@ def get_loop():
     x=np.concatenate([x[-n:]*(1-w)+x[:n]*w,x[n:-n]])
     rms=float(np.sqrt(np.mean(x*x)))
     if rms<1e-8 or not np.isfinite(rms):raise RuntimeError("Silent ambience")
-    return x*min(8,10**((-39 if mood else -28)/20)/rms)
+    x*=min(8,10**((-39 if mood else -28)/20)/rms)
+    return np.roll(x,int(hashlib.sha256((job_id+":"+str(v)).encode()).hexdigest(),16)%len(x),axis=0)
 budget=a.max_sections
 for v in range(1,a.variations+1):
     folder=job/f"variation_{v}";folder.mkdir(exist_ok=True)
@@ -243,6 +246,7 @@ for v in range(1,a.variations+1):
     if rms<1e-5 or decoded_peak<1e-5:raise RuntimeError("Export is effectively silent")
     if decoded_peak>=.999:raise RuntimeError("Export reaches digital clipping threshold")
     quality={"status":"technical_checks_passed","decoded_seconds":decoded_frames/SR,"sample_rate":SR,"channels":2,"checkpoint_bits":24 if mood else None,"rms_dbfs":20*math.log10(max(rms,1e-12)),"sample_peak_dbfs":20*math.log10(max(decoded_peak,1e-12)),"longest_very_quiet_seconds":longest_quiet/SR,"warnings":[]}
+    quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recording with varied starting phase and gentle level variation" if nature!="none" else None}
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
     if stats["limited_samples"]>stats["samples"]*.01:quality["warnings"].append("Frequent peak limiting; review dynamics.")
     similarities=[x["similarity"] for k,x in state["sections"].items() if k.startswith(f"{v}:") and x.get("similarity") is not None]
