@@ -28,7 +28,7 @@ p=argparse.ArgumentParser()
 p.add_argument("--preset",choices=PRESETS,default="luxury_spa")
 p.add_argument("--tuning",choices=["standard","a432","c528"],default="standard")
 p.add_argument("--composition",choices=["independent","thematic"],default="independent")
-p.add_argument("--engine",choices=["aria","fast"],default="aria")
+p.add_argument("--engine",choices=["aria","fast","studio"],default="aria")
 p.add_argument("--seconds",type=int,default=120)
 p.add_argument("--job",default=None)
 p.add_argument("--seed",default="")
@@ -49,14 +49,14 @@ if not isinstance(gains,dict) or any(k not in allowed or not isinstance(v,(int,f
 if a.instruments and not set(a.instruments.split(","))<=allowed:p.error("Invalid instruments")
 if not 15<=a.seconds<=43200 or a.max_sections<1: p.error("Duration 15–43200 seconds; positive max-sections")
 job_id=a.job or uuid.uuid4().hex[:12]
-if a.seed and (a.engine!="fast" or not a.seed.isascii() or not a.seed.isalnum() or len(a.seed)>48):p.error("Seed requires Fast Acoustic and 1–48 ASCII letters or digits")
+if a.seed and (a.engine not in ("fast","studio") or not a.seed.isascii() or not a.seed.isalnum() or len(a.seed)>48):p.error("Seed requires Fast Acoustic and 1–48 ASCII letters or digits")
 if not 1<=a.seed_variation<=3 or (a.seed_variation!=1 and (not a.seed or a.variations!=1)):p.error("Selected seed variation requires a fixed seed and one output")
 creative_seed=a.seed or job_id
 def seed_for(*parts):return int(hashlib.sha256(":".join(map(str,(creative_seed,*parts))).encode()).hexdigest()[:16],16)
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":20,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":21,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -88,7 +88,7 @@ required=max(0,a.variations*a.seconds*(bytes_per_second+(310000 if mood else 0))
 if shutil.disk_usage(job).free<required:raise RuntimeError("Insufficient estimated free disk; choose shorter duration, fewer variations or MP3")
 overlap=4*SR
 # Equal-size 15–60 second source sections; no final tiny section.
-section_limit=120 if a.engine=="fast" else 60
+section_limit=120 if a.engine in ("fast","studio") else 60
 count=max(1,math.ceil((a.seconds-4)/(section_limit-4))) if mood else 0
 section_seconds=max(15,math.ceil((a.seconds+4*max(0,count-1))/max(1,count)))
 def run(cmd,log,env=None):
@@ -120,7 +120,7 @@ def melodic_similarity(a,b):
 def get_loop(nature):
     candidates=sorted((ROOT/"nature"/nature).rglob("*.wav"))
     if not candidates:raise RuntimeError("Missing nature recording: "+nature)
-    path=candidates[int(hashlib.sha256((creative_seed+":"+str(v)+":"+nature).encode()).hexdigest(),16)%len(candidates)]
+    path=candidates[int(hashlib.sha256((creative_seed+":"+str(musical_v)+":"+nature).encode()).hexdigest(),16)%len(candidates)]
     x,s=sf.read(path,dtype="float32",always_2d=True)
     if s!=SR:
         g=math.gcd(s,SR);x=resample_poly(x,SR//g,s//g,axis=0)
@@ -133,7 +133,7 @@ def get_loop(nature):
     rms=float(np.sqrt(np.mean(x*x)))
     if rms<1e-8 or not np.isfinite(rms):raise RuntimeError("Silent ambience")
     x*=min(8,10**((-39 if mood else -28)/20)/rms)
-    return np.roll(x,int(hashlib.sha256((creative_seed+":"+str(v)).encode()).hexdigest(),16)%len(x),axis=0)
+    return np.roll(x,int(hashlib.sha256((creative_seed+":"+str(musical_v)).encode()).hexdigest(),16)%len(x),axis=0)
 budget=a.max_sections
 for v in range(1,a.variations+1):
     musical_v=v+a.seed_variation-1
@@ -151,10 +151,10 @@ for v in range(1,a.variations+1):
             for d in ("models","instruments","nature","licenses"):
                 (isolated/d).symlink_to(ROOT/d,target_is_directory=True)
             env=dict(os.environ,AURALUNA_ROOT=str(isolated),AURALUNA_TONIC=str([48,50,53,55,57][int(hashlib.sha256((creative_seed+str(musical_v)).encode()).hexdigest(),16)%5]))
-            if a.engine=="fast":env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(musical_v,i,"performance"))
+            if a.engine in ("fast","studio"):env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(musical_v,i,"performance"))
             env.update(AURALUNA_SECTION=str(i),AURALUNA_SECTIONS=str(count),AURALUNA_MOTIF_SEED=str(int(hashlib.sha256((creative_seed+":"+str(musical_v)+(":"+str(i) if a.composition=="independent" else "")).encode()).hexdigest()[:16],16)),AURALUNA_COMPOSITION=a.composition)
             for attempt in range(3):
-                if a.engine=="fast":
+                if a.engine in ("fast","studio"):
                     env["AURALUNA_PERFORMANCE_SEED"]=str(seed_for(musical_v,i,attempt,"performance"))
                 try:
                     run([sys.executable,str(HERE/"compose_preview.py"),"--mood",mood,"--seconds",str(section_seconds),"--midi-only","--engine",a.engine],folder/"compose.log",env)
@@ -168,7 +168,7 @@ for v in range(1,a.variations+1):
                     similarities=[melodic_similarity(fingerprint,x.get("fingerprint",{})) for k,x in state["sections"].items() if k!=key]
                     maximum=max((x for x in similarities if x is not None),default=None)
                     # Retry highly similar independent sections, but never reject legitimate recurring themes.
-                    if a.engine=="fast" and a.composition=="independent" and maximum is not None and maximum>.85 and attempt<2:
+                    if a.engine in ("fast","studio") and a.composition=="independent" and maximum is not None and maximum>.85 and attempt<2:
                         print(f"Variation {v}: retrying similar section ({maximum:.2f})",flush=True)
                         env["AURALUNA_MOTIF_SEED"]=str(seed_for(musical_v,i,attempt+1,"motif"))
                         continue
@@ -382,26 +382,26 @@ for v in range(1,a.variations+1):
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
     quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
     quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":(192 if a.aac_mode=="balanced" else 256) if a.format=="m4a" and a.aac_mode!="vbr" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
-    quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; not LUFS normalization or true-peak limiting."}
+    quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; YouTube additionally uses peak-constrained constant-gain normalization; no dedicated true-peak limiter."}
     if normalization is not None:
         quality["normalization"]=normalization
         if normalization["peak_constrained"]:quality["warnings"].append("Loudness target limited by peak headroom or maximum gain; dynamics preserved.")
     quality["seed_variation"]=musical_v
-    quality["composition_seed"]=creative_seed if a.engine=="fast" else None
+    quality["composition_seed"]=creative_seed if a.engine in ("fast","studio") else None
     quality["nature_layers_db"]=layers
     quality["nature_mix_normalization"]=layer_scale
     if longest_quiet>20*SR:quality["warnings"].append("Extended quiet passage; listen to verify it is intentional.")
     if stats["limited_samples"]>stats["samples"]*.01:quality["warnings"].append("Frequent peak limiting; review dynamics.")
     similarities=[x["similarity"] for k,x in state["sections"].items() if k.startswith(f"{v}:") and x.get("similarity") is not None]
     quality["composition_analysis"]={"method":"MIDI upper-voice interval 4-gram weighted Jaccard (heuristic)","sections":count,"max_similarity":max(similarities,default=None),"comparisons_available":len(similarities),"scope":"MIDI only; does not measure recorded phrases, nature loops or perceived audio repetition"}
-    if a.engine=="fast" and a.composition=="independent" and any(x>.85 for x in similarities):quality["warnings"].append("Some MIDI sections remain highly similar; audition for repetition.")
+    if a.engine in ("fast","studio") and a.composition=="independent" and any(x>.85 for x in similarities):quality["warnings"].append("Some MIDI sections remain highly similar; audition for repetition.")
     os.replace(temp,final)
     records=[]
     for f in (ROOT/"licenses").glob("*.json"):
         d=json.loads(f.read_text())
         if (instruments and f.stem in instruments.split(",")) or (instruments and d.get("category","").removeprefix("instruments/") in instruments.split(",")) or d.get("category") in {"nature/"+name for name in layers}:records.append(d)
     (folder/"licences.json").write_text(json.dumps(records,indent=2))
-    done.write_text(json.dumps({"engine":a.engine if mood else "nature","composition":a.composition if mood and a.engine=="fast" else None,"seconds":a.seconds,"sample_rate":SR,"file":final.name,"quality":quality,"licence_note":"Review source attribution and model output rights; no legal clearance guarantee."},indent=2))
+    done.write_text(json.dumps({"engine":a.engine if mood else "nature","composition":a.composition if mood and a.engine in ("fast","studio") else None,"seconds":a.seconds,"sample_rate":SR,"file":final.name,"quality":quality,"licence_note":"Review source attribution and model output rights; no legal clearance guarantee."},indent=2))
     for section in folder.glob("section_*.flac"):section.unlink()
     print(f"PERF final mix and export: {time.monotonic()-export_started:.1f}s",flush=True)
     print("COMPLETE:",final,flush=True)
