@@ -79,37 +79,39 @@ async function addFile(slug,name){
  h.textContent=history().find(x=>x.slug===slug)?.title||"Your generated music";
  meta.textContent=name.split(".").pop().toUpperCase()+" · Original production";
  player.controls=true;player.preload="metadata";player.style.width="100%";player.hidden=true;
- download.type="button";download.textContent="Download music";download.className="v9-download";download.hidden=false;
+ download.type="button";download.textContent="Download music";download.className="v9-download";
  message.textContent="Preparing your music…";message.setAttribute("role","status");
  retry.type="button";retry.className="v9-secondary";retry.textContent="Retry audio";retry.hidden=true;
  row.append(h,meta,message,player,download,retry);$("players").append(row);
- async function load(){retry.hidden=true;message.textContent="Preparing your music…";try{
-  const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));
-  if(active!==slug)return;
-  const u=new URL(d.url);if(u.protocol!=="https:")throw Error("Invalid output URL");
-  player.src=u.href;player.hidden=false;message.textContent="";
- }catch(e){message.textContent=e.message;retry.hidden=false}}
+ let objectURL="",loading=null;
+ const query="?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name);
+ async function getAudio(){
+  if(objectURL)return objectURL;
+  if(!loading)loading=(async()=>{
+   const r=await fetch(API+"/file"+query,{cache:"no-store",headers:{Authorization:"Bearer "+key}});
+   if(!r.ok){let detail;try{detail=(await r.json()).error}catch{}throw Error(detail||"Download HTTP "+r.status)}
+   if(!(r.headers.get("content-type")||"").startsWith("audio/"))throw Error("Server did not return audio");
+   const blob=await r.blob();if(!blob.size)throw Error("Empty music file");
+   if(!row.isConnected)throw Error("Track selection changed");
+   objectURL=URL.createObjectURL(blob);
+   const observer=new MutationObserver(()=>{if(!row.isConnected){URL.revokeObjectURL(objectURL);objectURL="";observer.disconnect()}});
+   observer.observe($("players"),{childList:true,subtree:true});
+   return objectURL;
+  })().finally(()=>loading=null);
+  return loading;
+ }
+ async function load(){
+  retry.hidden=true;message.textContent="Preparing your music…";
+  try{const u=await getAudio();if(!row.isConnected)return;player.src=u;player.hidden=false;message.textContent=""}
+  catch(e){message.textContent=e.message;retry.hidden=false}
+ }
  download.onclick=async()=>{
   download.disabled=true;download.textContent="Preparing download…";
-  row.querySelector(".v9-direct-link")?.remove();
-  try{
-   const d=await api("/download?slug="+encodeURIComponent(slug)+"&file="+encodeURIComponent(name));
-   const u=new URL(d.url);if(u.protocol!=="https:")throw Error("Invalid output URL");
-   try{
-    const response=await fetch(u.href,{cache:"no-store",credentials:"omit"});
-    if(!response.ok)throw Error("Storage HTTP "+response.status);
-    const blob=await response.blob();if(!blob.size)throw Error("Empty music file");
-    const object=URL.createObjectURL(blob);
-    const a=document.createElement("a");a.href=object;a.download=d.name||name.split("/").pop();document.body.append(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(object),60000);message.textContent="Download requested.";
-   }catch(e){
-    const a=document.createElement("a");a.className="v9-direct-link";a.href=u.href;a.target="_blank";a.rel="noopener noreferrer";a.textContent="Open fresh download link";a.download=d.name||name.split("/").pop();
-    row.append(a);message.textContent="Browser could not fetch the file directly. Use the fresh link below to open or save your music.";
-   }
-  }catch(e){message.textContent="Download unavailable: "+e.message;retry.hidden=false}
+  try{const u=await getAudio();const a=document.createElement("a");a.href=u;a.download=name.split("/").pop();document.body.append(a);a.click();a.remove();message.textContent="Download requested."}
+  catch(e){message.textContent="Download unavailable: "+e.message;retry.hidden=false}
   finally{download.disabled=false;download.textContent="Download music"}
  };
- retry.onclick=load;player.onerror=()=>{message.textContent="Audio unavailable. Refresh the audio link.";retry.hidden=false};
+ retry.onclick=load;player.onerror=()=>{message.textContent="Audio could not play. Try downloading it.";retry.hidden=false};
  await load();
 }
 function addReports(slug,files){
