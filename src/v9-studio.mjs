@@ -68,6 +68,42 @@ function estimate(r){
  return {low:Math.max(1,Math.floor(low)),high:Math.max(2,Math.ceil(high)),signature,source:rates.length>=3?"Based on "+rates.length+" comparable completed jobs":"Initial planning estimate"};
 }
 function estimateLabel(e){return e?e.low+"–"+e.high+" min":"—"}
+// Local, transparent instruction interpreter. No external AI or paid service.
+function directMusic(){
+ const t=$("director-prompt").value.trim().toLowerCase(), changes=[];
+ if(!t){$("director-status").textContent="Enter an editing instruction.";return}
+ if($("mode").value==="prompt"){$("director-status").textContent="Switch to Preset + custom mix to edit individual settings.";return}
+ if(busy||submitting||pendingSlug){$("director-status").textContent="Finish the active production before editing.";return}
+ const soft=/\b(softer|quieter|reduce|less|lower)\b/, strong=/\b(louder|increase|more|stronger|raise)\b/;
+ const aliases={felt_piano:"felt piano|soft piano|piano",grand_piano:"grand piano|piano",flute:"flute",cello:"cello",harp:"harp",handpan:"handpan",bansuri:"bansuri|bamboo flute",singing_bowls:"singing bowls?|tibetan bowls?"};
+ const setGain=(c,n)=>{c.slider.value=String(Math.max(-30,Math.min(6,Number(c.slider.value)+n)))};
+ for(const clause of t.split(/[,;.!]|\band\b|\bbut\b/)){
+  if(/\b(deep sleep|more peaceful|more relaxing|gentler|for sleeping)\b/.test(clause)){$("mastering").value="sleep";changes.push("Deep Sleep mastering")}
+  if(/\b(luxury spa|spa mastering)\b/.test(clause)){$("mastering").value="spa";changes.push("Luxury Spa mastering")}
+  if(/\b(less repetitive|more variation|independent sections)\b/.test(clause)){$("composition-engine").value="fast";$("composition-style").value="independent";changes.push("Fast Acoustic independent sections")}
+  if(/\b(recurring theme|consistent theme|same motif)\b/.test(clause)){$("composition-engine").value="fast";$("composition-style").value="thematic";changes.push("Fast Acoustic recurring theme")}
+  for(const [key,c] of Object.entries({...controls,...natureControls})){
+   const alias=aliases[key]||key;
+   if(!new RegExp("\\b(?:"+alias+")\\b").test(clause))continue;
+   if(/\b(remove|without|no|exclude|mute)\b/.test(clause)){if(c.check.checked){c.check.checked=false;changes.push("Removed "+(instruments[key]||natureNames[key]))}}
+   else if(/\b(add|include|enable)\b/.test(clause)){c.check.checked=true;changes.push("Added "+(instruments[key]||natureNames[key]))}
+   else if(soft.test(clause)||strong.test(clause)){if(c.check.checked){setGain(c,soft.test(clause)?-3:3);changes.push((instruments[key]||natureNames[key])+" "+c.slider.value+" dB")}}
+  }
+ }
+ refresh();$("director-status").textContent=changes.length?changes.join(" · ")+". Review settings before generating.":"No supported changes found. Try ‘reduce river’, ‘remove cello’, ‘add harp’, or ‘more variation’.";
+}
+function planExport(){
+ const mb=Number($("target-mb").value),seconds=Math.round(Number($("duration").value)*60);
+ if(!Number.isFinite(mb)||mb<=0||!Number.isFinite(seconds)||seconds<15){$("target-status").textContent="Enter a positive target size and valid duration.";return}
+ const choices=[["mp3","premium",320,"Premium MP3"],["m4a","premium",256,"Premium AAC"],["m4a","balanced",192,"Balanced AAC"]];
+ const fitting=choices.filter(x=>seconds*x[2]/8000*1.03<=mb);
+ const pick=fitting[0];
+ if(!pick){$("target-status").textContent="No predictable supported bitrate fits this target. Balanced AAC is approximately "+(seconds*192/8000).toFixed(1)+" MB before overhead. Shorten duration or increase budget; no aggressive compression applied.";return}
+ $("target-status").textContent=pick[3]+" fits the planning budget at approximately "+(seconds*pick[2]/8000).toFixed(1)+" MB per track. This is an estimate, not a hard cap.";
+ $("format").value=pick[0];$("aac-mode").value=pick[1];refresh();
+}
+$("director-apply").addEventListener("click",directMusic);
+$("target-apply").addEventListener("click",planExport);
 function refresh(){
  const infer=$('mode').value==='prompt';$('mix-section').hidden=infer;$('preset').disabled=infer;$('infer-duration-row').hidden=true;$('duration').disabled=false;
  const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&Object.keys(chosenNature()).length>0;const fast=$('composition-engine').value==='fast';
@@ -335,6 +371,7 @@ function addReports(slug,files){
      if(q.composition_analysis){field("Musical sections",q.composition_analysis.sections);field("Highest MIDI similarity",Number.isFinite(q.composition_analysis.max_similarity)?(100*q.composition_analysis.max_similarity).toFixed(1)+"%":"Insufficient comparison data");}
      if(q.export){field("Export codec",q.export.codec);field("Encoding mode",q.export.encoding_mode==="vbr"?"Quality-driven VBR":q.export.encoding_mode||"Not recorded");field("Target bitrate",q.export.target_kbps?q.export.target_kbps+" kbps":q.export.encoding_mode==="vbr"?"Variable, no fixed target":"Lossless / not recorded");field("Actual average file bitrate",number(q.export.average_file_kbps," kbps"));field("File size",Number.isFinite(q.export.file_bytes)?(q.export.file_bytes/1e6).toFixed(1)+" MB":"Not recorded");}
      if(q.loudness){field("Integrated loudness",number(q.loudness.integrated_lufs," LUFS"));field("Loudness range",number(q.loudness.range_lu," LU"));field("Measured true peak",number(q.loudness.true_peak_dbtp," dBTP"));field("Loudness analysis",q.loudness.status);}
+     if(q.normalization){field("Target loudness",number(q.normalization.target_lufs," LUFS"));field("Normalization gain",number(q.normalization.applied_gain_db," dB"));field("Peak-constrained",q.normalization.peak_constrained?"Yes":"No");}
      if(q.mastering){field("Mastering profile",q.mastering.profile);field("Master gain",number(q.mastering.gain_db," dB"));field("Pre-encoding sample ceiling",number(q.mastering.sample_ceiling_dbfs," dBFS"));field("Fade in / out",q.mastering.fade_in_seconds+" / "+q.mastering.fade_out_seconds+" s");}
      if(q.composition_seed)field("Composition seed",q.composition_seed);
      if(q.tuning){field("Tuning",q.tuning.mode==="a432"?"A4 = 432 Hz":q.tuning.mode==="c528"?"C5 = 528 Hz":"Standard pitch");field("Nominal A4",number(q.tuning.nominal_a4_hz," Hz"));field("Nominal C5",number(q.tuning.nominal_c5_hz," Hz"));}
