@@ -56,7 +56,7 @@ def seed_for(*parts):return int(hashlib.sha256(":".join(map(str,(creative_seed,*
 if not job_id.isalnum():p.error("Job ID must be alphanumeric")
 job=ROOT/"jobs"/job_id; job.mkdir(parents=True,exist_ok=True)
 manifest=job/"job.json"
-config={"quality_revision":22,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
+config={"quality_revision":23,"mastering":a.mastering,"seed_variation":a.seed_variation,"seed":creative_seed,"aac_mode":a.aac_mode,"tuning":a.tuning,"nature_layers":a.nature_layers,"composition":a.composition,"engine":a.engine,"preset":a.preset,"seconds":a.seconds,"format":a.format,"variations":a.variations}
 if gains or a.instruments is not None or a.nature is not None:config.update(gains=gains,instruments=a.instruments,nature=a.nature)
 if manifest.exists():
     state=json.loads(manifest.read_text())
@@ -227,6 +227,38 @@ for v in range(1,a.variations+1):
     master_gain,peak_ceiling,fade_in,fade_out={"original":(0,-8,6,8),"sleep":(-3,-10,10,15),"spa":(0,-8,8,12),"youtube":(3,-4,6,8)}[a.mastering]
     stats={"sum_squares":0.0,"samples":0,"peak":0.0,"limited_samples":0}
     if a.mastering=="youtube" and shutil.disk_usage(folder).free<total*6+128*1024**2:raise RuntimeError("Insufficient space for lossless normalization master; choose Original mastering or a shorter duration")
+    # Adaptive subtractive EQ: gentle band attenuation only when excessive energy
+    # is measured. Continuous filter state and smoothed gain across blocks.
+    # Original mastering is deliberately untouched.
+    eq_enabled=a.mastering in ("sleep","spa","youtube")
+    eq_report={"enabled":eq_enabled,"method":"adaptive subtractive band EQ","bands":[]}
+    if eq_enabled:
+        from scipy.signal import butter,sosfilt
+        eq_bands=[]
+        for name,lo,hi,threshold,max_cut in [
+            ("sub_bass",20,80,.45,2.0),
+            ("low_mid",180,420,.55,2.0),
+            ("presence",2500,5500,.23,2.5 if a.mastering=="sleep" else 1.5),
+            ("high",6500,14000,.18,1.5)]:
+            sos=butter(2,[lo,hi],btype="bandpass",fs=SR,output="sos")
+            eq_bands.append({"name":name,"hz":[lo,hi],"threshold":threshold,"max_cut_db":max_cut,"sos":sos,"zi":np.zeros((len(sos),2,2)),"gain":0.,"max_applied_cut_db":0.})
+        def adaptive_eq(x):
+            y=x.copy()
+            # Analyse short blocks, not a whole hour in memory.
+            for start in range(0,len(x),SR):
+                stop=min(start+SR,len(x));block=x[start:stop]
+                energy=float(np.mean(block*block,dtype=np.float64))
+                for band in eq_bands:
+                    filtered,band["zi"]=sosfilt(band["sos"],block,axis=0,zi=band["zi"])
+                    ratio=float(np.mean(filtered*filtered))/max(energy,1e-12)
+                    target=0. if energy<1e-9 else min(band["max_cut_db"],max(0.,10*math.log10(max(ratio,1e-12)/band["threshold"])))
+                    old=band["gain"]
+                    new=target+(old-target)*math.exp(-(stop-start)/(SR*2.0))
+                    gain=np.linspace(old,new,stop-start,endpoint=False)
+                    y[start:stop]-=(1-10**(-gain/20))[:,None]*filtered
+                    band["gain"]=new
+                    band["max_applied_cut_db"]=max(band["max_applied_cut_db"],new)
+            return y
     with encoder() as writer:
         def write(x):
             global pos
@@ -236,6 +268,7 @@ for v in range(1,a.variations+1):
             for index,(name,loop) in enumerate(loops.items()):
                 modulation=(1+.035*np.sin(2*np.pi*ix/(SR*(97+index*23)))).astype(np.float32)
                 x+=loop[ix%len(loop)]*modulation[:,None]*(10**(layers[name]/20)/layer_scale)
+            if eq_enabled:x=adaptive_eq(x)
             fade=np.minimum(np.minimum(ix/(fade_in*SR),(total-1-ix)/(fade_out*SR)),1).clip(0,1)
             x*=fade[:,None]*(10**(master_gain/20))
             limit=10**(peak_ceiling/20)
@@ -395,6 +428,9 @@ for v in range(1,a.variations+1):
     quality["recorded_layers"]={"bansuri":"original-pitch recorded excerpts; repetition possible" if instruments and "bansuri" in instruments.split(",") else None,"nature":"crossfaded recordings with varied starting phase and gentle level variation" if layers else None}
     quality["tuning"]={"mode":a.tuning,"pitch_ratio":pitch_ratio,"nominal_a4_hz":440*pitch_ratio if mood else None,"nominal_c5_hz":440*2**(3/12)*pitch_ratio if mood else None,"scope":"Instrument mix only; recorded sources may deviate from concert pitch. Nature sounds unchanged."}
     quality["export"]={"format":a.format,"codec":"AAC-LC" if a.format=="m4a" else a.format.upper(),"encoding_mode":("vbr" if a.aac_mode=="vbr" else "target_bitrate") if a.format=="m4a" else "standard","vbr_quality":1.5 if a.format=="m4a" and a.aac_mode=="vbr" else None,"target_kbps":(192 if a.aac_mode=="balanced" else 256) if a.format=="m4a" and a.aac_mode!="vbr" else 320 if a.format=="mp3" else None,"file_bytes":temp.stat().st_size,"average_file_kbps":temp.stat().st_size*8/(a.seconds*1000)}
+    if eq_enabled:
+        eq_report["bands"]=[{k:b[k] for k in ("name","hz","max_cut_db","max_applied_cut_db")} for b in eq_bands]
+    quality["equalisation"]=eq_report
     quality["mastering"]={"profile":a.mastering,"gain_db":master_gain,"sample_ceiling_dbfs":peak_ceiling,"fade_in_seconds":fade_in,"fade_out_seconds":fade_out,"scope":"Gain, soft sample peak shaping and fades; YouTube additionally uses peak-constrained constant-gain normalization; YouTube uses 4x oversampled limiting and decoded peak verification."}
     if normalization is not None:
         quality["normalization"]=normalization
