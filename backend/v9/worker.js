@@ -79,7 +79,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V28-instrument-regeneration",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V29-long-join",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -90,6 +90,24 @@ export default {async fetch(req,env){
  }
  try{
   if(url.pathname==="/test-kaggle"&&req.method==="GET"){await call("ListKernels",{pageSize:1});return reply({connected:true})}
+  if(url.pathname==="/join"&&req.method==="POST"){
+    const body=await req.json(),parts=body?.parts,format=body?.format;
+    if(!["mp3","m4a"].includes(format)||!Array.isArray(parts)||parts.length<2||parts.length>12||new Set(parts).size!==parts.length||parts.some(p=>typeof p!=="string"||!/^auraluna-[a-f0-9]{32}$/.test(p)))return reply({error:"Invalid join plan"},400);
+    const job=crypto.randomUUID().replaceAll("-",""),slug="auraluna-"+job;
+    const source=[
+      "import subprocess,sys,urllib.request",
+      "from pathlib import Path",
+      "engine=Path('/kaggle/temp/join_parts.py')",
+      "engine.parent.mkdir(parents=True,exist_ok=True)",
+      "urllib.request.urlretrieve("+JSON.stringify(BASE+"join_parts.py")+",engine)",
+      "request=engine.with_name('join.json')",
+      "request.write_text("+JSON.stringify(JSON.stringify({parts,format})) +")",
+      "subprocess.run([sys.executable,str(engine),str(request)],check=True)"
+    ].join("\n");
+    const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:slug.replaceAll("-"," "),text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:false,enableTpu:false,enableInternet:true,datasetDataSources:[],kernelDataSources:parts.map(p=>env.KAGGLE_USERNAME+"/"+p),competitionDataSources:[],modelDataSources:[]});
+    if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm join notebook");
+    return reply({job,slug,status:"submitted",compute:"CPU"},202);
+  }
   if(url.pathname==="/generate"&&req.method==="POST"){
     if(!env.KAGGLE_DATASET||!/^[-a-zA-Z0-9_]+\/[-a-zA-Z0-9_]+$/.test(env.KAGGLE_DATASET))return reply({error:"Configure KAGGLE_DATASET first"},503);
     let r;try{r=validate(await req.json())}catch(e){return reply({error:e.message},400)}
