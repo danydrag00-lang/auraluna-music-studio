@@ -55,11 +55,12 @@ from scipy.signal import butter,sosfilt
 
 p=argparse.ArgumentParser()
 p.add_argument("--mood",choices=["deep_sleep","luxury_spa","meditation","peaceful_piano"],default="luxury_spa")
-p.add_argument("--seconds",type=int,default=30,choices=range(15,61))
+p.add_argument("--seconds",type=int,default=30)
 p.add_argument("--engine",choices=["aria","fast"],default="aria")
 p.add_argument("--midi-only",action="store_true",help="Skip unused preview rendering during production")
 p.add_argument("--rain",action="store_true")
 a=p.parse_args()
+if not 15<=a.seconds<=(120 if a.engine=="fast" else 60):p.error("Unsupported composition section duration")
 root=Path(os.environ.get("AURALUNA_ROOT","/kaggle/working/Auraluna-V9"))
 out=root/"productions"/uuid.uuid4().hex[:12]
 out.mkdir(parents=True)
@@ -70,7 +71,10 @@ if a.engine=="fast":
     # Choose one key per production when supplied, to keep section transitions coherent.
     key=int(os.environ.get("AURALUNA_TONIC",str(int(rng.choice([48,50,53,55,57])))))
     scale=[0,2,3,5,7,8,10] if a.mood=="deep_sleep" else [0,2,4,5,7,9,11]
-    chords=[[0,2,4],[5,0,2],[3,5,0],[4,6,1],[0,2,4]]
+    # Diatonic progressions selected independently per section; one stable key per variation.
+    progressions=[[0,5,3,0],[0,3,1,0],[0,2,3,5],[0,3,4,0],[5,3,0,2]]
+    roots=progressions[int(rng.integers(len(progressions)))]
+    chords=[[(d+j)%7 for j in (0,2,4)] for d in roots]
     beat=float(rng.uniform(1.0,1.25)) if a.mood=="luxury_spa" else float(rng.uniform(1.3,1.65))
     phrase=beat*4
     midi=pretty_midi.PrettyMIDI()
@@ -85,14 +89,14 @@ if a.engine=="fast":
         pitches=[key+scale[d] for d in degrees]
         root=pitches[0]
         note(root-12,t,phrase*.87, rng.integers(34,44))
-        note(root+7,t+beat*.35,phrase*.70,rng.integers(30,40))
+        note(pitches[2],t+beat*.35,phrase*.70,rng.integers(30,40))
         for j,pitch in enumerate(pitches):
             note(pitch,t+beat*(.15+j*.65),phrase*.72,rng.integers(34,46))
         for j in range(3):
             if j>0 and rng.random()<.22:continue
-            degree=degrees[int(motif[(j+i)%4])]
-            candidates=[key+scale[degree]+o for o in (12,24)]
-            pitch=min(candidates,key=lambda n:abs(n-previous))
+            degree=degrees[int(motif[(j+i)%4])] if rng.random()<.8 else int(rng.choice(degrees))
+            candidates=[key+scale[degree]+o for o in (0,12,24) if 55<=key+scale[degree]+o<=84]
+            pitch=min(candidates,key=lambda n:abs(n-previous)+float(rng.uniform(0,5)))
             previous=pitch
             note(pitch,t+beat*(.65+j*1.05)+float(rng.uniform(-.04,.04)),beat*float(rng.uniform(.9,1.6)),rng.integers(43,58))
     midi.instruments.append(track)
