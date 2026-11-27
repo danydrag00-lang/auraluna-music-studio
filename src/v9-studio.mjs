@@ -77,7 +77,22 @@ let pendingMeta=null;
 document.addEventListener("visibilitychange",()=>{if(document.hidden)continuousObservation=false});
 let selectedEnd=0,clockRunning=false,selectedEstimate=null,continuousObservation=false,submittingSlugExpected=false;
 function durationLabel(seconds){if(!Number.isFinite(seconds)||seconds<=0)return "Not recorded";const n=Math.round(seconds);return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
-function showRequest(meta){selectedEstimate=meta?.estimate||null;$("requested-estimate").textContent=estimateLabel(selectedEstimate);$("requested-duration").textContent=durationLabel(meta?.seconds);$("requested-style").textContent=meta?.title||"Saved production";$("requested-format").textContent=meta?.format?.toUpperCase()||"—";$("requested-compute").textContent=meta?.compute?meta.compute+" requested":"Not recorded";}
+function showRequest(meta){
+ selectedEstimate=meta?.estimate||null;
+ let retrospective=false;
+ // Older jobs may lack request metadata. Never fabricate a historical accelerator or original estimate.
+ if(!selectedEstimate&&meta?.seconds&&Number.isFinite(meta.seconds)){
+  const preset=Object.entries(presets).find(([,v])=>v[0]===meta.title);
+  if(preset&&(meta.engine||preset[1][1].length===0)){
+   const [, [title,ins,nature]]=preset;
+   if(ins.length===0){
+    selectedEstimate=estimate({seconds:meta.seconds,variations:meta.variations||1,format:meta.format||"mp3",instruments:[],nature,engine:meta.engine||"aria"});
+    retrospective=true;
+   }
+  }
+ }
+ $("estimate-caption").textContent=retrospective?"Planning estimate (inferred; not original)":"Original estimate";
+ $("requested-estimate").textContent=selectedEstimate?estimateLabel(selectedEstimate):"Not recorded";$("requested-duration").textContent=durationLabel(meta?.seconds);$("requested-style").textContent=meta?.title||"Saved production";$("requested-format").textContent=meta?.format?.toUpperCase()||"—";$("requested-compute").textContent=meta?.compute?meta.compute+" requested":"Not recorded";}
 let monitorVersion=0, pollInFlight=false, selectedStarted=0, lastChecked=0, unknownChecks=0;
 const terminalStates=new Set(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED","CANCEL_REQUESTED"]);
 function updateSaved(slug,patch){try{const rows=history();localStorage.setItem(historyKey,JSON.stringify(rows.map(x=>x.slug===slug?{...x,...patch}:x)))}catch{}renderHistory()}
@@ -120,7 +135,9 @@ async function connect(value,remember){
   if(remember){try{localStorage.setItem(keyStorage,value)}catch{status("Connected for this visit only: browser storage unavailable.");}}
   else forgetKey();
   $("access-key").value="";$("credentials").hidden=true;
-  status("Connected");unlock();
+  let backendVersion="";try{const health=await fetch(API+"/health",{cache:"no-store"});if(health.ok)backendVersion=(await health.json()).version||""}catch{}
+  if(version!==connectionVersion)return;
+  status(backendVersion==="V14-cpu-routing"?"Connected · V14 CPU routing":backendVersion?"Connected · "+backendVersion+" · CPU routing not confirmed; update Worker if needed.":"Connected · Backend version unavailable");unlock();
   const latest=history()[0];if(latest)await watch(latest.slug);
  }catch(e){if(version!==connectionVersion)return;key="";if(e.status===401||e.status===403)forgetKey();$("credentials").hidden=false;status(e.message)}
  finally{if(version===connectionVersion)$("connect").disabled=false}
