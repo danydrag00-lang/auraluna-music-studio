@@ -46,7 +46,7 @@ if len(sys.argv)>1 and sys.argv[1]=="--serve-aria":
                     pass
     raise SystemExit(0)
 
-import argparse, json, os, subprocess, uuid, hashlib, time, socket
+import argparse, json, os, subprocess, uuid, hashlib, time, socket, math
 from pathlib import Path
 import numpy as np
 import pretty_midi
@@ -67,38 +67,46 @@ out.mkdir(parents=True)
 rng=np.random.default_rng()
 sr=48000
 if a.engine=="fast":
-    # Original stochastic tonal phrases; acoustic rendering is handled by arrange.py.
-    # Choose one key per production when supplied, to keep section transitions coherent.
-    key=int(os.environ.get("AURALUNA_TONIC",str(int(rng.choice([48,50,53,55,57])))))
+    # Section-aware composition: recurring motifs, gentle breathing space, stable tonal centre.
+    key=int(os.environ.get("AURALUNA_TONIC","50"))
+    section=int(os.environ.get("AURALUNA_SECTION","0"))
+    sections=max(1,int(os.environ.get("AURALUNA_SECTIONS","1")))
+    shared=int(os.environ.get("AURALUNA_MOTIF_SEED","0")) or int(rng.integers(1,2**31))
+    theme=np.random.default_rng(shared)
     scale=[0,2,3,5,7,8,10] if a.mood=="deep_sleep" else [0,2,4,5,7,9,11]
-    # Diatonic progressions selected independently per section; one stable key per variation.
     progressions=[[0,5,3,0],[0,3,1,0],[0,2,3,5],[0,3,4,0],[5,3,0,2]]
-    roots=progressions[int(rng.integers(len(progressions)))]
-    chords=[[(d+j)%7 for j in (0,2,4)] for d in roots]
-    beat=float(rng.uniform(1.0,1.25)) if a.mood=="luxury_spa" else float(rng.uniform(1.3,1.65))
-    phrase=beat*4
+    roots=progressions[(int(theme.integers(len(progressions)))+section//2)%len(progressions)]
+    beat=float(theme.uniform(1.05,1.28) if a.mood=="luxury_spa" else theme.uniform(1.35,1.75))
+    motif=theme.integers(0,3,size=6)
     midi=pretty_midi.PrettyMIDI()
     track=pretty_midi.Instrument(0)
+    previous=key+12
     def note(p,t,d,v):
         t=max(0,t);end=min(a.seconds,t+d)
-        if end>t:track.notes.append(pretty_midi.Note(int(v),int(p),float(t),float(end)))
-    motif=rng.integers(0,3,size=4)
-    previous=key+12
-    for i,t in enumerate(np.arange(0,a.seconds,phrase)):
-        degrees=chords[i%len(chords)]
+        if end>t:track.notes.append(pretty_midi.Note(int(np.clip(v,25,68)),int(p),float(t),float(end)))
+    t=0.;i=0
+    while t<a.seconds:
+        breath=1+.055*math.sin(i*.72)+float(rng.uniform(-.025,.025))
+        b=beat*breath;phrase=b*4
+        degree=roots[i%len(roots)]
+        if i==0 or t+phrase>=a.seconds:degree=0
+        degrees=[(degree+j)%7 for j in (0,2,4)]
         pitches=[key+scale[d] for d in degrees]
         root=pitches[0]
-        note(root-12,t,phrase*.87, rng.integers(34,44))
-        note(pitches[2],t+beat*.35,phrase*.70,rng.integers(30,40))
+        contour=math.sin(math.pi*min(1,(section+t/a.seconds)/sections))
+        swell=3*contour+2*math.sin(i*.55)
+        note(root-12,t,phrase*.90,39+swell+rng.uniform(-3,3))
         for j,pitch in enumerate(pitches):
-            note(pitch,t+beat*(.15+j*.65),phrase*.72,rng.integers(34,46))
-        for j in range(3):
-            if j>0 and rng.random()<.22:continue
-            degree=degrees[int(motif[(j+i)%4])] if rng.random()<.8 else int(rng.choice(degrees))
-            candidates=[key+scale[degree]+o for o in (0,12,24) if 55<=key+scale[degree]+o<=84]
-            pitch=min(candidates,key=lambda n:abs(n-previous)+float(rng.uniform(0,5)))
+            note(pitch,t+b*(.15+j*(.48 if i%4<2 else .18)),phrase*(.65-.06*j),37+swell+rng.uniform(-4,4))
+        slots=[.65,1.8,2.95] if i%4!=3 else [.85,2.4]
+        for j,slot in enumerate(slots):
+            if j and rng.random()<( .36 if a.mood=="deep_sleep" else .19):continue
+            d=degrees[int(motif[(j+i)%len(motif)])] if rng.random()<.88 else int(rng.choice(degrees))
+            candidates=[key+scale[d]+o for o in (0,12,24) if 60<=key+scale[d]+o<=84]
+            pitch=min(candidates,key=lambda n:abs(n-previous)+float(rng.uniform(0,3)))
             previous=pitch
-            note(pitch,t+beat*(.65+j*1.05)+float(rng.uniform(-.04,.04)),beat*float(rng.uniform(.9,1.6)),rng.integers(43,58))
+            note(pitch,t+b*slot+float(rng.uniform(-.035,.035)),b*float(rng.uniform(.75,1.25)),48+swell+rng.uniform(-5,5))
+        t+=phrase;i+=1
     midi.instruments.append(track)
     midi.write(str(out/"arrangement.mid"))
     print("FAST MIDI READY:",out/"arrangement.mid",flush=True)
