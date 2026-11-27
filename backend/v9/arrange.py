@@ -66,11 +66,11 @@ for t in np.arange(0,a.seconds-1,4):
     if "cello" in parts:
         pitch=next(p for p in range(40,52) if p%12==bass%12)
         parts["cello"].append(note(pitch,t+.15,t+3.5,rng.integers(35,45)))
-    if "flute" in parts and rng.random()<.75:
+    if "flute" in parts and (not parts["flute"] or rng.random()<(.60 if a.mood=="deep_sleep" else .78)):
         choices=[p for p in range(65,82) if p%12 in pcs]
         pitch=min(choices,key=lambda p:abs(p-last)+rng.uniform(0,4))
         parts["flute"].append(note(pitch,t+.6,t+float(rng.uniform(2.5,3.4)),rng.integers(39,49))); last=pitch
-    if "harp" in parts and rng.random()<.75:
+    if "harp" in parts and (not parts["harp"] or rng.random()<.70):
         choices=sorted({next(p for p in range(60,72) if p%12==pc) for pc in pcs})
         for j,p in enumerate(choices[:3]):
             parts["harp"].append(note(p,t+.25+j*.45,t+2.5+j*.45,rng.integers(33,43)))
@@ -127,7 +127,9 @@ def acoustic(name,ns):
         size=min(int((n.end-n.start+.65)*SR),int((len(x)-1)/ratio))
         if size<1:continue
         y=map_coordinates(x,[np.arange(size)*ratio],order=3,mode="nearest")[:,None]
-        mix_note(bus,y,n,.12,.55)
+        attack=float(rng.uniform(.08,.18)) if name=="flute" else float(rng.uniform(.14,.26))
+        release=float(rng.uniform(.40,.65)) if name=="flute" else float(rng.uniform(.55,.85))
+        mix_note(bus,y,n,attack,release)
     return bus
 def font_render(name,ns):
     font=next((root/"instruments"/name).rglob("*.sf2"))
@@ -155,6 +157,11 @@ for name,ns in parts.items():
             # Recorded phrase, not a chromatic instrument. Keep original pitch.
             offset=int(rng.integers(0,max(1,len(recording)-frames+1)))
             segment=recording[offset:offset+frames]
+            segment=segment.copy()
+            fade=min(SR//2,len(segment)//4)
+            if fade:
+                segment[:fade]*=np.linspace(0,1,fade,dtype=np.float32)[:,None]
+                segment[-fade:]*=np.linspace(1,0,fade,dtype=np.float32)[:,None]
             x[:len(segment)]=segment
             report[name]=1
         else:
