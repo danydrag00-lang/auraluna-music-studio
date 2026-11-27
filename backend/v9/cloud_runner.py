@@ -32,28 +32,47 @@ print("Dataset mount entries:",[str(p) for p in inputs.iterdir()] if inputs.exis
 sources=locate(inputs)
 if len(sources)>1:raise RuntimeError("Multiple complete asset roots: "+str(sources))
 if not sources:
-    archives=sorted(p for p in inputs.rglob("*") if p.is_file() and p.name.lower().endswith((".tar",".tar.gz",".tgz",".tar.xz",".tar.bz2")) and "auraluna" in p.name.lower())
+    archives=sorted(p for p in inputs.rglob("*") if p.is_file() and p.name.lower().endswith((".tar",".tar.gz",".tgz",".tar.xz",".tar.bz2")))
     print("Asset archive candidates:",[str(p) for p in archives],flush=True)
-    if len(archives)!=1:
+    # Inspect archive manifests, rather than relying on the uploaded filename.
+    # Only accept archives that actually contain all the required assets under one root.
+    matches=[]
+    for archive in archives:
+        try:
+            with tarfile.open(archive,"r:*") as t:
+                roots={}
+                for m in t:
+                    parts=Path(m.name).parts
+                    if not (m.isfile() or m.isdir()) or m.name.startswith("/") or ".." in parts:continue
+                    for target in required:
+                        wanted=Path(target).parts
+                        for i in range(len(parts)-len(wanted)+1):
+                            if parts[i:i+len(wanted)]==wanted and m.isfile():
+                                roots.setdefault(parts[:i],set()).add(target)
+                for prefix,found in roots.items():
+                    if found==set(required):matches.append((archive,prefix))
+        except (tarfile.TarError,OSError) as exc:
+            print("Could not inspect archive:",archive.name,str(exc),flush=True)
+    if len(matches)!=1:
         import itertools
+        print("Matching asset roots:",[(str(p),prefix) for p,prefix in matches],flush=True)
+        print("Required assets:",required,flush=True)
         print("Input sample:",[str(p) for p in itertools.islice(inputs.rglob("*"),40)],flush=True)
-        raise RuntimeError("No unique Auraluna archive or complete extracted asset root; verify dataset attachment and contents")
+        raise RuntimeError("No unique archive containing requested assets. Verify KAGGLE_DATASET attachment and listed missing asset categories.")
+    archive,prefix=matches[0]
     unpack=scratch/"unpacked"
     unpack.mkdir(exist_ok=True)
-    with tarfile.open(archives[0],"r:*") as t:
-        # Keep only regular files and directories under selected asset paths.
-        # Compressed archives still require sequential reads; this reduces writes and disk use.
+    with tarfile.open(archive,"r:*") as t:
         def selected(member):
             parts=Path(member.name).parts
             if not (member.isfile() or member.isdir()) or member.name.startswith("/") or ".." in parts:return False
-            for target in required:
-                wanted=Path(target).parts
-                if any(parts[i:i+len(wanted)]==wanted for i in range(len(parts))):return True
-            return False
+            if parts[:len(prefix)]!=prefix:return False
+            relative=parts[len(prefix):]
+            return any(relative[:len(Path(target).parts)]==Path(target).parts for target in required)
         t.extractall(unpack,members=(m for m in t if selected(m)),filter="data")
     print("Restored required asset categories:",", ".join(required),flush=True)
     sources=locate(unpack)
-    if len(sources)!=1:raise RuntimeError("Archive does not contain one complete asset root: "+str(sources))
+    if len(sources)!=1:raise RuntimeError("Archive does not contain one complete extracted asset root: "+str(sources))
 source=sources[0]
 print("Using asset root:",source,flush=True)
 for name in ("instruments","nature","licenses","models"):
