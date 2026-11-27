@@ -11,6 +11,11 @@ scratch.mkdir(parents=True,exist_ok=True)
 root=scratch
 os.environ["AURALUNA_ROOT"]=str(root)
 root.mkdir(parents=True,exist_ok=True)
+from request import normalize,command
+r=normalize(json.loads(a.request.read_text()))
+nature_only=not r["instruments"]
+started_job=time.monotonic()
+print("AURALUNA STAGE: restoring acoustic assets",flush=True)
 inputs=Path("/kaggle/input")
 required=("instruments","nature","licenses","models/model.safetensors")
 def complete(p):
@@ -43,38 +48,64 @@ for name in ("instruments","nature","licenses","models/model.safetensors"):
     if not (root/name).exists():raise RuntimeError("Asset missing: "+name)
 engine=Path(__file__).resolve().parent
 started=time.monotonic()
-subprocess.run([sys.executable,str(engine/"bootstrap.py")],check=True)
+print("AURALUNA STAGE: preparing audio engine",flush=True)
+if nature_only:
+    # Nature export only needs numpy/scipy/soundfile and FFmpeg.
+    import importlib.util
+    missing=[name for name in ("numpy","scipy","soundfile") if importlib.util.find_spec(name) is None]
+    if missing:subprocess.run([sys.executable,"-m","pip","install","-q",*missing],check=True)
+    if not shutil.which("ffmpeg"):
+        subprocess.run(["apt-get","update","-qq"],check=True)
+        subprocess.run(["apt-get","install","-y","-qq","ffmpeg"],check=True)
+    print("PERF nature-only: skipped Aria, model setup and FluidSynth",flush=True)
+else:
+    subprocess.run([sys.executable,str(engine/"bootstrap.py")],check=True)
 print(f"PERF total bootstrap: {time.monotonic()-started:.1f}s",flush=True)
-from request import normalize,command
-r=normalize(json.loads(a.request.read_text()))
 print("Starting",r["job"],flush=True)
+job=root/"jobs"/r["job"]
 # Keep one model process alive across all production batches, not across users or jobs.
 # Private socket directory, with explicit cleanup even on a failed production.
-with tempfile.TemporaryDirectory(prefix="auraluna-aria-",dir="/tmp") as service_dir:
-    socket_path=str(Path(service_dir)/"inference.sock")
-    env=dict(os.environ,AURALUNA_ARIA_SOCKET=socket_path)
-    with (root/"logs/aria-service.log").open("a") as service_log:
-        service=subprocess.Popen(
-            ["/tmp/aria-env/bin/python",str(engine/"compose_preview.py"),"--serve-aria",socket_path,str(root/"models/model.safetensors")],
-            stdout=service_log,stderr=subprocess.STDOUT)
-        try:
-            # Run bounded batches inside this single remote notebook.
-            for _ in range(1000):
-                subprocess.run(command(r,12),check=True,env=env)
-                job=root/"jobs"/r["job"]
-                if all((job/f"variation_{i}"/"completed.json").exists() for i in range(1,r["variations"]+1)):break
-            else:raise RuntimeError("Production did not finish within batch limit")
-        finally:
-            service.terminate()
-            try:service.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                service.kill()
-                service.wait()
-            # Show useful performance timings and final diagnostic context in Kaggle logs.
-            service_log.flush()
-            with (root/"logs/aria-service.log").open() as log:
-                for line in log:
-                    if line.startswith("PERF ") or line.startswith("Aria inference service ready"):print(line.strip(),flush=True)
+if nature_only:
+    print("AURALUNA STAGE: mixing nature and encoding audio",flush=True)
+    subprocess.run(command(r,12),check=True)
+else:
+    with tempfile.TemporaryDirectory(prefix="auraluna-aria-",dir="/tmp") as service_dir:
+        socket_path=str(Path(service_dir)/"inference.sock")
+        env=dict(os.environ,AURALUNA_ARIA_SOCKET=socket_path)
+        with (root/"logs/aria-service.log").open("a") as service_log:
+            service=subprocess.Popen(
+                ["/tmp/aria-env/bin/python",str(engine/"compose_preview.py"),"--serve-aria",socket_path,str(root/"models/model.safetensors")],
+                stdout=service_log,stderr=subprocess.STDOUT)
+            try:
+                print("AURALUNA STAGE: composing and arranging",flush=True)
+                # Run bounded batches inside this single remote notebook.
+                for _ in range(1000):
+                    if service.poll() is not None:raise RuntimeError("Aria service exited; inspect diagnostic log below")
+                    subprocess.run(command(r,12),check=True,env=env)
+                    job=root/"jobs"/r["job"]
+                    if all((job/f"variation_{i}"/"completed.json").exists() for i in range(1,r["variations"]+1)):break
+                else:raise RuntimeError("Production did not finish within batch limit")
+            finally:
+                if service.poll() is None:service.terminate()
+                try:service.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    service.kill()
+                    service.wait()
+                # Show useful performance timings and final diagnostic context in Kaggle logs.
+                service_log.flush()
+                with (root/"logs/aria-service.log").open() as log:
+                    from collections import deque
+                    recent=deque(maxlen=60)
+                    for line in log:
+                        recent.append(line)
+                        if line.startswith("PERF ") or line.startswith("Aria inference service ready"):print(line.strip(),flush=True)
+                    if sys.exc_info()[0] is not None:
+                        print("Aria diagnostic log tail:",flush=True)
+                        for line in recent:print(line.rstrip(),flush=True)
+                        for logpath in sorted(job.glob("variation_*/*.log")):
+                            with logpath.open(errors="replace") as details:
+                                print(str(logpath.name),flush=True)
+                                for line in deque(details,maxlen=30):print(line.rstrip(),flush=True)
 output=Path("/kaggle/working/results")
 output.mkdir(exist_ok=True)
 for i in range(1,r["variations"]+1):
@@ -82,4 +113,5 @@ for i in range(1,r["variations"]+1):
     for name in ("music."+r["format"],"licences.json","completed.json"):
         if not (source/name).is_file():raise RuntimeError("Missing production output: "+name)
         shutil.copy2(source/name,output/f"variation_{i}_{name}")
+print(f"PERF total engine execution: {time.monotonic()-started_job:.1f}s",flush=True)
 print("AURALUNA COMPLETE",flush=True)
