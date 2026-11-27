@@ -43,11 +43,14 @@ let key="",busy=false,timer=null,active="",attempt=0;
 const historyKey="auraluna-v9-jobs";
 function history(){try{return JSON.parse(localStorage.getItem(historyKey)||"[]").filter(x=>/^auraluna-[a-f0-9]{32}$/.test(x.slug))}catch{return []}}
 let pendingMeta=null;
+let selectedEnd=0;
+function durationLabel(seconds){if(!Number.isFinite(seconds)||seconds<=0)return "Not recorded";const n=Math.round(seconds);return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
+function showRequest(meta){$("requested-duration").textContent=durationLabel(meta?.seconds);$("requested-style").textContent=meta?.title||"Saved production";$("requested-format").textContent=meta?.format?.toUpperCase()||"—";}
 let monitorVersion=0, pollInFlight=false, selectedStarted=0, lastChecked=0, unknownChecks=0;
 const terminalStates=new Set(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED","CANCEL_REQUESTED"]);
 function updateSaved(slug,patch){try{const rows=history();localStorage.setItem(historyKey,JSON.stringify(rows.map(x=>x.slug===slug?{...x,...patch}:x)))}catch{}renderHistory()}
 function showProgress(text,running=false){$("production-status").textContent=text;$("production-panel").hidden=false;$("production-progress").hidden=!running;$("check-status").disabled=pollInFlight||!active||!key;}
-function elapsed(){if(!selectedStarted)return "—";const n=Math.max(0,Math.floor((Date.now()-selectedStarted)/1000));return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
+function elapsed(){if(!selectedStarted)return "—";const n=Math.max(0,Math.floor(((selectedEnd||Date.now())-selectedStarted)/1000));return Math.floor(n/60)+"m "+String(n%60).padStart(2,"0")+"s"}
 function updateClock(){$("elapsed-time").textContent=elapsed();$("last-check").textContent=lastChecked?new Date(lastChecked).toLocaleTimeString():"—"}
 setInterval(updateClock,1000);
 function remember(slug){try{localStorage.setItem(historyKey,JSON.stringify([{slug,...(history().find(x=>x.slug===slug)||{}),...(pendingMeta||{})},...history().filter(x=>x.slug!==slug)].slice(0,30)))}catch{}renderHistory()}
@@ -60,7 +63,7 @@ function renderHistory(){
   const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("p"),button=document.createElement("button");
   name.textContent=title||"Saved track";
   const labels={COMPLETE:"Ready",COMPLETED:"Ready",SUCCESS:"Ready",RUNNING:"Creating",QUEUED:"Queued",ERROR:"Failed",FAILED:"Failed",CANCELED:"Canceled",CANCELLED:"Canceled"};
-  meta.textContent=[date?new Date(date).toLocaleString():"",seconds?Math.round(seconds/60*100)/100+" min":"",format?.toUpperCase(),labels[state]||"Check status"].filter(Boolean).join(" · ");
+  meta.textContent=[date?new Date(date).toLocaleString():"",seconds?"Requested: "+durationLabel(seconds):"Requested duration not recorded",format?.toUpperCase(),labels[state]||"Check status"].filter(Boolean).join(" · ");
   info.append(name,meta);button.type="button";button.className="v9-secondary";button.textContent=["COMPLETE","COMPLETED","SUCCESS"].includes(state)?"Listen & download":"Open";button.onclick=()=>watch(slug);item.append(info,button);el.append(item);
  }
 }
@@ -96,7 +99,10 @@ async function addFile(slug,name){
  const row=document.createElement("article");row.className="v9-result";
  const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("button"),message=document.createElement("p"),retry=document.createElement("button");
  h.textContent=history().find(x=>x.slug===slug)?.title||"Your generated music";
- meta.textContent=name.split(".").pop().toUpperCase()+" · Original production";
+ const saved=history().find(x=>x.slug===slug);
+ const requested=saved?.seconds?" · Requested: "+durationLabel(saved.seconds):"";
+ meta.textContent=name.split(".").pop().toUpperCase()+requested;
+ player.addEventListener("loadedmetadata",()=>{if(Number.isFinite(player.duration)&&player.duration>0)meta.textContent=name.split(".").pop().toUpperCase()+requested+" · Audio length: "+durationLabel(player.duration)});
  player.controls=true;player.preload="metadata";player.style.width="100%";player.hidden=true;
  download.type="button";download.textContent="Download music";download.className="v9-download";
  message.textContent="Preparing your music…";message.setAttribute("role","status");
@@ -141,7 +147,7 @@ async function watch(slug){
  if(!key){status("Connect first.");return}
  clearTimeout(timer);const version=++monitorVersion;active=slug;remember(slug);pendingMeta=null;
  const saved=history().find(x=>x.slug===slug);
- selectedStarted=saved?.date?Date.parse(saved.date):0;lastChecked=0;attempt=0;unknownChecks=0;pollInFlight=false;
+ showRequest(saved);selectedEnd=saved?.observedEnd||0;selectedStarted=saved?.date?Date.parse(saved.date):0;lastChecked=0;attempt=0;unknownChecks=0;pollInFlight=false;
  $("players").replaceChildren();updateClock();
  showProgress("Checking production…",true);await poll(slug,version);
 }
@@ -153,7 +159,9 @@ async function poll(slug,version=monitorVersion){
   const d=await api("/status?slug="+encodeURIComponent(slug));
   if(version!==monitorVersion)return;
   const state=String(d.status).toUpperCase();
-  lastChecked=Date.now();updateClock();updateSaved(slug,{state});attempt=0;
+  lastChecked=Date.now();
+  if(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED"].includes(state)){selectedEnd=selectedEnd||lastChecked;updateSaved(slug,{state,observedEnd:selectedEnd})}else{selectedEnd=0;updateSaved(slug,{state,observedEnd:0})}
+  updateClock();attempt=0;
   const uncertain=["UNKNOWN","UNSPECIFIED","UNDEFINED","NULL","0","STATUS_UNSPECIFIED"].includes(state);
   if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)||uncertain){
    showProgress(uncertain?"Checking for saved audio…":"Production complete. Preparing audio…",true);
@@ -165,7 +173,7 @@ async function poll(slug,version=monitorVersion){
     if(uncertain){unknownChecks++;showProgress("Kaggle has not confirmed the production status. No audio found."+(unknownChecks<4?" Checking again automatically.":" Open Production details to verify the job; do not submit a duplicate."),false);if(unknownChecks<4)next=30000;return}
     showProgress("Completed, but no audio is available yet.");next=20000;return
    }
-   if(uncertain)updateSaved(slug,{state:"COMPLETE"});
+   if(uncertain){selectedEnd=selectedEnd||Date.now();updateSaved(slug,{state:"COMPLETE",observedEnd:selectedEnd})}
    for(const f of audio){if(version!==monitorVersion)return;await addFile(slug,f.name)}
    if(version!==monitorVersion)return;
    if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);
@@ -193,7 +201,7 @@ async function poll(slug,version=monitorVersion){
 $("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
-$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date().toISOString(),seconds:data.seconds,format:data.format,state:"QUEUED"};await watch(d.slug)}catch(e){showProgress(e.message);unlock()}};
+$("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";selectedStarted=Date.now();selectedEnd=0;lastChecked=0;showRequest({title:data.preset?presets[data.preset][0]:"Custom music",seconds:data.seconds,format:data.format});updateClock();showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date(selectedStarted).toISOString(),seconds:data.seconds,format:data.format,state:"QUEUED"};await watch(d.slug)}catch(e){showProgress(e.message);unlock()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
 try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
