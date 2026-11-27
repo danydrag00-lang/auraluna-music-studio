@@ -51,11 +51,13 @@ if "handpan" in parts:
         if np.sqrt(np.mean(x*x))>15:playable.append(pitch)
     synth.delete()
     if not playable:raise RuntimeError("No playable handpan keys")
-    for t in np.arange(.5,a.seconds-1,3.5):
+    for t in np.cumsum(rng.uniform(2.8,4.5,size=int(a.seconds/2)+1)):
+        if t>=a.seconds-1:break
         active=[n for n in notes if n.start<t+1 and n.end>t]
         compatible=[p for p in playable if any(p%12==n.pitch%12 for n in active)]
-        pitch=int(rng.choice(compatible or playable))
-        parts["handpan"].append(note(pitch,t,t+2.5,43))
+        if not compatible:continue
+        pitch=int(rng.choice(compatible))
+        parts["handpan"].append(note(pitch,t,t+float(rng.uniform(2.0,3.0)),rng.integers(38,49)))
 for t in np.arange(0,a.seconds-1,4):
     active=[n for n in notes if n.start<t+1.2 and n.end>t]
     if not active: continue
@@ -63,15 +65,15 @@ for t in np.arange(0,a.seconds-1,4):
     pcs=set(n.pitch%12 for n in active)
     if "cello" in parts:
         pitch=next(p for p in range(40,52) if p%12==bass%12)
-        parts["cello"].append(note(pitch,t+.15,t+3.5,40))
+        parts["cello"].append(note(pitch,t+.15,t+3.5,rng.integers(35,45)))
     if "flute" in parts and rng.random()<.75:
         choices=[p for p in range(65,82) if p%12 in pcs]
         pitch=min(choices,key=lambda p:abs(p-last)+rng.uniform(0,4))
-        parts["flute"].append(note(pitch,t+.6,t+2.8,45)); last=pitch
+        parts["flute"].append(note(pitch,t+.6,t+float(rng.uniform(2.5,3.4)),rng.integers(39,49))); last=pitch
     if "harp" in parts and rng.random()<.75:
         choices=sorted({next(p for p in range(60,72) if p%12==pc) for pc in pcs})
         for j,p in enumerate(choices[:3]):
-            parts["harp"].append(note(p,t+.25+j*.45,t+2.5+j*.45,38))
+            parts["harp"].append(note(p,t+.25+j*.45,t+2.5+j*.45,rng.integers(33,43)))
 @lru_cache(maxsize=48)
 def load(path):
     x,s=sf.read(path,dtype="float32",always_2d=True)
@@ -156,7 +158,9 @@ for name,ns in parts.items():
             x[:len(segment)]=segment
             report[name]=1
         else:
-            starts=list(range(0,frames,SR*17))
+            starts=[0]
+            while starts[-1]+SR*22<frames:
+                starts.append(starts[-1]+int(SR*rng.uniform(15,22)))
             for start in starts:
                 segment=recording[:min(len(recording),frames-start)].copy()
                 fade=min(SR,len(segment)//2)
