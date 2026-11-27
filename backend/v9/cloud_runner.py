@@ -14,6 +14,7 @@ root.mkdir(parents=True,exist_ok=True)
 from request import normalize,command
 r=normalize(json.loads(a.request.read_text()))
 nature_only=not r["instruments"]
+fast=r["engine"]=="fast"
 started_job=time.monotonic()
 print("AURALUNA STAGE: restoring acoustic assets",flush=True)
 inputs=Path("/kaggle/input")
@@ -59,7 +60,7 @@ if nature_only:
         subprocess.run(["apt-get","install","-y","-qq","ffmpeg"],check=True)
     print("PERF nature-only: skipped Aria, model setup and FluidSynth",flush=True)
 else:
-    subprocess.run([sys.executable,str(engine/"bootstrap.py")],check=True)
+    subprocess.run([sys.executable,str(engine/"bootstrap.py")]+(["--acoustic-only"] if fast else []),check=True)
 print(f"PERF total bootstrap: {time.monotonic()-started:.1f}s",flush=True)
 print("Starting",r["job"],flush=True)
 job=root/"jobs"/r["job"]
@@ -68,6 +69,12 @@ job=root/"jobs"/r["job"]
 if nature_only:
     print("AURALUNA STAGE: mixing nature and encoding audio",flush=True)
     subprocess.run(command(r,12),check=True)
+elif fast:
+    print("AURALUNA STAGE: fast tonal composition and acoustic rendering",flush=True)
+    for _ in range(1000):
+        subprocess.run(command(r,12),check=True)
+        if all((job/f"variation_{i}"/"completed.json").exists() for i in range(1,r["variations"]+1)):break
+    else:raise RuntimeError("Production did not finish within batch limit")
 else:
     with tempfile.TemporaryDirectory(prefix="auraluna-aria-",dir="/tmp") as service_dir:
         socket_path=str(Path(service_dir)/"inference.sock")
