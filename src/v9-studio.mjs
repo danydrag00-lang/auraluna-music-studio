@@ -25,14 +25,17 @@ function buildRequest(){
  const infer=$('mode').value==='prompt', prompt=$('prompt').value.trim();
  const data={job:$('job').value.trim(),prompt,variations:Number($('variations').value),format:$('format').value};
  if(!/^[A-Za-z0-9]{1,48}$/.test(data.job))throw Error('Use a job ID containing only letters and numbers.');
- {data.seconds=Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>300)throw Error('Choose a duration between 15 seconds and 5 minutes.');}
+ {data.seconds=Math.round(Number($('duration').value)*60);if(!Number.isInteger(data.seconds)||data.seconds<15||data.seconds>3600)throw Error('Choose a duration between 15 seconds and 60 minutes.');}
  if(infer){if(!prompt)throw Error('Describe your music first.');}
  else{data.preset=$('preset').value;data.instruments=Object.keys(controls).filter(k=>controls[k].check.checked);data.nature=$('nature').value;data.gains=Object.fromEntries(data.instruments.map(k=>[k,Number(controls[k].slider.value)]));if(!data.instruments.length&&data.nature==='none')throw Error('Select at least one instrument or nature sound.');}
+ const natureOnly=!infer&&data.instruments.length===0&&data.nature!=='none';
+ if(data.seconds>(natureOnly?3600:900))throw Error('Choose up to '+(natureOnly?60:15)+' minutes for this mode.');
  if(data.format==='wav'&&data.seconds&&data.seconds*288000>=2**32-65536)throw Error('This duration exceeds the standard WAV size limit. Choose MP3 or FLAC.');
  return data;
 }
 function refresh(){
  const infer=$('mode').value==='prompt';$('mix-section').hidden=infer;$('preset').disabled=infer;$('infer-duration-row').hidden=true;$('duration').disabled=false;
+ const natureOnly=!infer&&!Object.values(controls).some(c=>c.check.checked)&&$('nature').value!=='none';$('duration').max=natureOnly?60:15;$('duration-limit').textContent=natureOnly?'Nature-only: up to 60 minutes.':'Instrumental or prompt mode: up to 15 minutes. Longer tracks are experimental and Kaggle quotas apply.';
  for(const c of Object.values(controls)){c.slider.disabled=!c.check.checked;c.value.textContent=(Number(c.slider.value)>0?'+':'')+c.slider.value+' dB'}
  try{const r=buildRequest();$('summary').textContent=(r.preset?presets[r.preset][0]:'Prompt-based configuration')+' · '+(r.seconds?r.seconds/60+' min':'duration inferred')+' · '+r.variations+' variation(s) · '+r.format.toUpperCase()+(r.instruments?' · '+r.instruments.map(k=>instruments[k]).join(', ')+' · '+r.nature:'');}
  catch(e){$('summary').textContent=e.message}
