@@ -43,7 +43,7 @@ let key="",busy=false,timer=null,active="",attempt=0;
 const historyKey="auraluna-v9-jobs";
 function history(){try{return JSON.parse(localStorage.getItem(historyKey)||"[]").filter(x=>/^auraluna-[a-f0-9]{32}$/.test(x.slug))}catch{return []}}
 let pendingMeta=null;
-let monitorVersion=0, pollInFlight=false, selectedStarted=0, lastChecked=0;
+let monitorVersion=0, pollInFlight=false, selectedStarted=0, lastChecked=0, unknownChecks=0;
 const terminalStates=new Set(["COMPLETE","COMPLETED","SUCCESS","ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED","CANCEL_REQUESTED"]);
 function updateSaved(slug,patch){try{const rows=history();localStorage.setItem(historyKey,JSON.stringify(rows.map(x=>x.slug===slug?{...x,...patch}:x)))}catch{}renderHistory()}
 function showProgress(text,running=false){$("production-status").textContent=text;$("production-panel").hidden=false;$("production-progress").hidden=!running;$("check-status").disabled=pollInFlight||!active||!key;}
@@ -141,7 +141,7 @@ async function watch(slug){
  if(!key){status("Connect first.");return}
  clearTimeout(timer);const version=++monitorVersion;active=slug;remember(slug);pendingMeta=null;
  const saved=history().find(x=>x.slug===slug);
- selectedStarted=saved?.date?Date.parse(saved.date):0;lastChecked=0;attempt=0;pollInFlight=false;
+ selectedStarted=saved?.date?Date.parse(saved.date):0;lastChecked=0;attempt=0;unknownChecks=0;pollInFlight=false;
  $("players").replaceChildren();updateClock();
  showProgress("Checking production…",true);await poll(slug,version);
 }
@@ -154,18 +154,24 @@ async function poll(slug,version=monitorVersion){
   if(version!==monitorVersion)return;
   const state=String(d.status).toUpperCase();
   lastChecked=Date.now();updateClock();updateSaved(slug,{state});attempt=0;
-  if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)){
-   showProgress("Production complete. Preparing audio…",true);
+  const uncertain=["UNKNOWN","UNSPECIFIED","UNDEFINED","NULL","0","STATUS_UNSPECIFIED"].includes(state);
+  if(["COMPLETE","COMPLETED","SUCCESS"].includes(state)||uncertain){
+   showProgress(uncertain?"Checking for saved audio…":"Production complete. Preparing audio…",true);
    const out=await api("/outputs?slug="+encodeURIComponent(slug));
    if(version!==monitorVersion)return;
    const files=out.files||[],audio=files.filter(f=>/\.(mp3|wav|flac)$/i.test(f.name));
    $("players").replaceChildren();
-   if(!audio.length){showProgress("Completed, but no audio is available yet.");next=20000;return}
+   if(!audio.length){
+    if(uncertain){unknownChecks++;showProgress("Kaggle has not confirmed the production status. No audio found."+(unknownChecks<4?" Checking again automatically.":" Open Production details to verify the job; do not submit a duplicate."),false);if(unknownChecks<4)next=30000;return}
+    showProgress("Completed, but no audio is available yet.");next=20000;return
+   }
+   if(uncertain)updateSaved(slug,{state:"COMPLETE"});
    for(const f of audio){if(version!==monitorVersion)return;await addFile(slug,f.name)}
    if(version!==monitorVersion)return;
    if(files.some(f=>f.name.endsWith(".json")))addReports(slug,files);
    showProgress("Production completed. Your audio is below.");unlock();return
   }
+  unknownChecks=0;
   if(["ERROR","FAILED","CANCELLED","CANCELED","CANCEL_ACKNOWLEDGED"].includes(state)){
    showProgress((state.includes("CANCEL")?"Production canceled.":"Production failed.")+(d.failureMessage?" "+d.failureMessage:" No further details supplied by Kaggle."));
    unlock();return
@@ -184,7 +190,7 @@ async function poll(slug,version=monitorVersion){
   }
  }
 }
-$("check-status").onclick=()=>{if(active){attempt=0;poll(active,monitorVersion)}};
+$("check-status").onclick=()=>{if(active){attempt=0;unknownChecks=0;poll(active,monitorVersion)}};
 $("production-details").onclick=()=>{if(active)window.open("https://www.kaggle.com/code/dhanushdrag/"+active,"_blank","noopener,noreferrer")};
 $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("change",applyPreset);
 $("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";showProgress("Submitting production…",true);const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date().toISOString(),seconds:data.seconds,format:data.format,state:"QUEUED"};await watch(d.slug)}catch(e){showProgress(e.message);unlock()}};
