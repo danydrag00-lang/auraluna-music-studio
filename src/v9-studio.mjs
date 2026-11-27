@@ -48,12 +48,31 @@ function renderHistory(){const el=$("history");el.replaceChildren();for(const {s
 async function api(path,options={}){
  if(!key)throw Error("Enter your Auraluna access key and connect first.");
  const r=await fetch(API+path,{...options,headers:{Authorization:"Bearer "+key,...options.headers}});
- const d=await r.json();if(!r.ok)throw Error(d.error||"Backend HTTP "+r.status);return d;
+ const d=await r.json();if(!r.ok){const e=new Error(d.error||"Backend HTTP "+r.status);e.status=r.status;throw e;}return d;
 }
 function status(s){$("cloud-status").textContent=s}
 function unlock(){busy=false;$("generate").disabled=!key;$("generate").textContent="Generate Music"}
-$("connect").onclick=async()=>{key=$("access-key").value.trim();$("access-key").value="";try{await api("/test-kaggle");status("Connected");$("generate").disabled=false;const latest=history()[0];if(latest)await watch(latest.slug)}catch(e){key="";status(e.message)}};
-$("disconnect").onclick=()=>{key="";clearTimeout(timer);active="";$("generate").disabled=true;status("Disconnected");busy=false;$("players").replaceChildren()};
+const keyStorage="auraluna-v9-device-access";
+function forgetKey(){try{localStorage.removeItem(keyStorage)}catch{}}
+let connectionVersion=0;
+async function connect(value,remember){
+ if(!value){status("Enter your access key.");return}
+ const version=++connectionVersion;
+ key=value;$("connect").disabled=true;$("generate").disabled=true;
+ status("Connecting…");
+ try{
+  await api("/test-kaggle");
+  if(version!==connectionVersion)return;
+  if(remember){try{localStorage.setItem(keyStorage,value)}catch{status("Connected for this visit only: browser storage unavailable.");}}
+  else forgetKey();
+  $("access-key").value="";$("credentials").hidden=true;
+  status("Connected");unlock();
+  const latest=history()[0];if(latest)await watch(latest.slug);
+ }catch(e){if(version!==connectionVersion)return;key="";if(e.status===401||e.status===403)forgetKey();$("credentials").hidden=false;status(e.message)}
+ finally{if(version===connectionVersion)$("connect").disabled=false}
+}
+$("connect").onclick=()=>connect($("access-key").value.trim(),$("remember-device").checked);
+$("disconnect").onclick=()=>{++connectionVersion;forgetKey();key="";clearTimeout(timer);active="";$("credentials").hidden=false;$("connect").disabled=false;$("generate").disabled=true;$("generate").textContent="Generate Music";status("Disconnected");busy=false;$("players").replaceChildren()};
 async function addFile(slug,name){
  const row=document.createElement("article");row.className="v9-result";
  const h=document.createElement("h3"),meta=document.createElement("p"),player=document.createElement("audio"),download=document.createElement("a"),message=document.createElement("p"),retry=document.createElement("button");
@@ -83,3 +102,4 @@ $("v9-form").addEventListener("input",refresh);$("preset").addEventListener("cha
 $("v9-form").onsubmit=async e=>{e.preventDefault();if(busy)return;try{const data=buildRequest();if(!key)throw Error("Connect first.");busy=true;$("generate").disabled=true;$("generate").textContent="Generating music…";status("Submitting private Kaggle production…");const d=await api("/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});pendingMeta={title:data.preset?presets[data.preset][0]:"Custom music",date:new Date().toISOString()};await watch(d.slug)}catch(e){status(e.message);unlock()}};
 $("check-job").onclick=()=>{const slug=$("existing-slug").value.trim();if(!/^auraluna-[a-f0-9]{32}$/.test(slug)){status("Invalid production slug");return}watch(slug)};
 newJob();applyPreset();renderHistory();
+try{const saved=localStorage.getItem(keyStorage);if(saved){$("remember-device").checked=true;connect(saved,true)}}catch{}
