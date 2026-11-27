@@ -69,7 +69,7 @@ def normalize(r):
     if tuning not in ("standard","a432","c528"):raise ValueError("Invalid tuning")
     if not instruments and tuning!="standard":raise ValueError("Tuning requires instruments")
     aac_mode=r.get("aac_mode","premium")
-    if aac_mode not in ("premium","vbr"):raise ValueError("Invalid AAC quality mode")
+    if aac_mode not in ("premium","vbr","balanced"):raise ValueError("Invalid AAC quality mode")
     if fmt!="m4a":aac_mode="premium"
     return dict(aac_mode=aac_mode,tuning=tuning,composition=composition,engine=engine,preset=preset,instruments=instruments,nature=nature,nature_layers=layers,seconds=seconds,variations=variations,format=fmt,job=job,gains=gains)
 def command(r,budget):
