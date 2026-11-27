@@ -218,10 +218,11 @@ function addReports(slug,files){
      field("Average level (RMS)",number(q.rms_dbfs," dBFS"));field("Sample peak",number(q.sample_peak_dbfs," dBFS"));
      field("Longest very quiet passage",number(q.longest_very_quiet_seconds," s"));
      if(q.composition_analysis){field("Musical sections",q.composition_analysis.sections);field("Highest MIDI similarity",Number.isFinite(q.composition_analysis.max_similarity)?(100*q.composition_analysis.max_similarity).toFixed(1)+"%":"Insufficient comparison data");}
+     if(q.audio_repetition){const ar=q.audio_repetition;field("Audio repetition candidates",ar.comparisons?ar.candidate_matches:"Insufficient comparison data");field("Highest audio pattern similarity",Number.isFinite(ar.max_similarity)?(100*ar.max_similarity).toFixed(1)+"%":"Not recorded");for(const match of (ar.examples||[]).slice(0,5))field("Listen and compare",durationLabel(match.first_seconds===0?0.001:match.first_seconds)+" / "+durationLabel(match.second_seconds)+" · "+(100*match.similarity).toFixed(1)+"% similarity");}
      for(const [instrument,count] of Object.entries(q.instrument_coverage||{}))field((instruments[instrument]||instrument)+" · sections rendered",count);
     }
     result.append(list);
-    const note=document.createElement("p");note.className="hint";note.textContent=q?"Technical checks do not certify artistic quality. MIDI similarity does not measure repetition in recorded nature or flute layers. Listen before publishing.":"Older production: detailed quality measurements were not recorded.";result.append(note);
+    const note=document.createElement("p");note.className="hint";note.textContent=q?"Technical checks do not certify artistic quality. MIDI and audio similarity are heuristic indicators, not proof of repetition. Listen before publishing.":"Older production: detailed quality measurements were not recorded.";result.append(note);
     if(Array.isArray(q?.warnings)&&q.warnings.length){const h=document.createElement("strong"),ul=document.createElement("ul");h.textContent="Listening review warnings";for(const warning of q.warnings){const li=document.createElement("li");li.textContent=String(warning);ul.append(li)}result.append(h,ul)}
     button.textContent="Refresh quality report";
    }catch(e){result.textContent=e.message;button.textContent="Retry quality report"}finally{button.disabled=false}
