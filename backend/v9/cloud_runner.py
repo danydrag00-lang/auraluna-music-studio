@@ -12,7 +12,27 @@ root=scratch
 os.environ["AURALUNA_ROOT"]=str(root)
 root.mkdir(parents=True,exist_ok=True)
 from request import normalize,command
-r=normalize(json.loads(a.request.read_text()))
+raw=json.loads(a.request.read_text())
+r=normalize(raw)
+extension=raw.get("extension")
+extension_source=None
+if extension is not None:
+    import re
+    if not isinstance(extension,dict) or not re.fullmatch(r"auraluna-[a-f0-9]{32}",str(extension.get("slug",""))) or type(extension.get("variation")) is not int or extension["variation"] not in (1,2,3) or extension.get("format") not in ("wav","flac") or r["format"]!="flac" or r["variations"]!=1 or not 75<=r["seconds"]<=900:
+        raise ValueError("Invalid lossless preview extension")
+    prefix=f"variation_{extension['variation']}_"
+    candidates=[p for p in Path("/kaggle/input").rglob(prefix+"music."+extension["format"]) if extension["slug"] in p.parts and p.is_file()]
+    if len(candidates)!=1:raise RuntimeError("Expected exactly one attached preview output; check source notebook permissions and retention")
+    extension_source=candidates[0]
+    preview_report=json.loads(extension_source.with_name(prefix+"completed.json").read_text())
+    preview_licences=json.loads(extension_source.with_name(prefix+"licences.json").read_text())
+    if preview_report.get("seconds")!=60 or preview_report.get("sample_rate")!=48000 or preview_report.get("quality",{}).get("status")!="technical_checks_passed":raise RuntimeError("Source must be a validated 60-second preview")
+    requested_total=r["seconds"]
+    r["seconds"]-=60
+    # A new identity prevents restarting the identical opening motif.
+    if r["seed"]:r["seed"]=(r["seed"][:35]+"Continuation")
+    print("EXTENSION: preserving the source audio; generating",r["seconds"],"new seconds",flush=True)
+
 nature_only=not r["instruments"]
 fast=r["engine"] in ("fast","studio")
 started_job=time.monotonic()
@@ -149,6 +169,39 @@ else:
                             with logpath.open(errors="replace") as details:
                                 print(str(logpath.name),flush=True)
                                 for line in deque(details,maxlen=30):print(line.rstrip(),flush=True)
+if extension_source is not None:
+    import soundfile as sf
+    import numpy as np
+    source=job/"variation_1"
+    continuation=source/"music.flac"
+    joined=source/"extended.part.flac"
+    # Copy the decoded original PCM24 samples exactly; no gain, crossfade
+    # or EQ is applied to the approved prefix. Join at the mastered fade.
+    for audio,seconds in [(extension_source,60),(continuation,r["seconds"])]:
+        info=sf.info(audio)
+        if info.samplerate!=48000 or info.channels!=2 or info.frames!=seconds*48000 or info.subtype!="PCM_24":
+            raise RuntimeError("Extension requires exact 48 kHz stereo PCM24 input")
+    if shutil.disk_usage(source).free<requested_total*288000+128*1024**2:raise RuntimeError("Not enough space for lossless extension")
+    with sf.SoundFile(joined,"w",samplerate=48000,channels=2,format="FLAC",subtype="PCM_24") as writer:
+        for audio in (extension_source,continuation):
+            with sf.SoundFile(audio) as reader:
+                for block in reader.blocks(blocksize=48000,dtype="int32",always_2d=True):writer.write(block)
+    # Verify the prefix bit for bit after decoding, and the full duration.
+    with sf.SoundFile(extension_source) as original,sf.SoundFile(joined) as result:
+        if result.frames!=requested_total*48000:raise RuntimeError("Incorrect extended duration")
+        for block in original.blocks(blocksize=48000,dtype="int32",always_2d=True):
+            if not np.array_equal(block,result.read(len(block),dtype="int32",always_2d=True)):raise RuntimeError("Preview PCM changed")
+    report=json.loads((source/"completed.json").read_text())
+    report["continuation_quality"]=report.pop("quality")
+    report["quality"]={"status":"extension_pcm_verified","sample_rate":48000,"channels":2,"decoded_seconds":requested_total,"warnings":["Original preview and continuation each retain their own mastering and fades. Join may have a quiet transition. Full joined loudness has not been measured."]}
+    report["seconds"]=requested_total
+    report["extension"]={"source_slug":extension["slug"],"source_variation":extension["variation"],"preserved_seconds":60,"pcm_prefix_verified":True,"join":"lossless concatenation at existing fades"}
+    licences=json.loads((source/"licences.json").read_text())
+    for record in preview_licences:
+        if record not in licences:licences.append(record)
+    os.replace(joined,continuation)
+    (source/"licences.json").write_text(json.dumps(licences,indent=2))
+    (source/"completed.json").write_text(json.dumps(report,indent=2))
 output=Path("/kaggle/working/results")
 output.mkdir(exist_ok=True)
 for i in range(1,r["variations"]+1):
