@@ -117,13 +117,28 @@ function elapsed(){if(!selectedStarted||(!clockRunning&&!selectedEnd))return "�
 function updateClock(){const spent=selectedStarted?((selectedEnd||Date.now())-selectedStarted)/60000:0;$("remaining-estimate").textContent=selectedEnd?"Finished / stopped":!clockRunning||!selectedEstimate?"—":spent>=selectedEstimate.high?"Taking longer than estimated":Math.max(0,Math.floor(selectedEstimate.low-spent))+"–"+Math.max(1,Math.ceil(selectedEstimate.high-spent))+" min (approx.)";$("elapsed-time").textContent=elapsed();$("last-check").textContent=lastChecked?new Date(lastChecked).toLocaleTimeString():"—"}
 setInterval(updateClock,1000);
 function remember(slug){try{localStorage.setItem(historyKey,JSON.stringify([{slug,...(history().find(x=>x.slug===slug)||{}),...(pendingMeta||{})},...history().filter(x=>x.slug!==slug)]))}catch{ $("library-status").textContent="Browser storage unavailable or full. Export your catalogue to preserve it." }renderHistory()}
+function restoreSettings(r){
+ if(busy||submitting||pendingSlug)return;
+ if(!r||typeof r!=="object")return;
+ const choose=(id,value)=>{if([...$(id).options].some(o=>o.value===String(value)))$(id).value=String(value)};
+ choose("mode",Array.isArray(r.instruments)?"manual":"prompt");
+ choose("preset",r.preset);choose("composition-engine",r.engine);choose("composition-style",r.composition);choose("tuning",r.tuning);choose("format",r.format);choose("aac-mode",r.aac_mode);
+ $("prompt").value=typeof r.prompt==="string"?r.prompt.slice(0,2000):"";
+ if(Array.isArray(r.instruments)){
+  for(const [k,c] of Object.entries(controls)){c.check.checked=r.instruments.includes(k);c.slider.value=Number.isFinite(r.gains?.[k])?Math.max(-30,Math.min(6,r.gains[k])):0;}
+  for(const [k,c] of Object.entries(natureControls)){c.check.checked=Object.hasOwn(r.nature_layers||{},k);c.slider.value=Number.isFinite(r.nature_layers?.[k])?Math.max(-30,Math.min(6,r.nature_layers[k])):0;}
+ }
+ $("variations").value="1";newJob();refresh();
+ $("duration").scrollIntoView({behavior:"smooth",block:"center"});$("duration").focus({preventScroll:true});
+ $("library-status").textContent="Musical settings restored. Choose your full duration and generate a new composition.";
+}
 function renderHistory(){
  const el=$("history");el.replaceChildren();
  const query=$("library-search").value.trim().toLowerCase(),filter=$("library-filter").value;
  const all=history(),rows=all.filter(x=>(!query||[x.title,x.slug,x.engine,x.composition,x.format,x.notes].some(v=>String(v||"").toLowerCase().includes(query)))&&(filter==="all"||filter==="ready"&&["COMPLETE","COMPLETED","SUCCESS"].includes(x.state)||filter==="favorites"&&x.favorite));
  $("library-count").textContent=rows.length+" of "+all.length+" productions";
  if(!rows.length){el.textContent=all.length?"No matching productions.":"Your generated music will appear here.";return}
- for(const {slug,title,date,state,seconds,format,compute,favorite,notes} of rows){
+ for(const {slug,title,date,state,seconds,format,compute,favorite,notes,requestSettings} of rows){
   const item=document.createElement("div");item.className="v9-saved";
   const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("p"),button=document.createElement("button");
   name.textContent=title||"Saved track";
@@ -133,7 +148,7 @@ function renderHistory(){
   const star=document.createElement("button"),edit=document.createElement("button");star.type=edit.type="button";star.className=edit.className="v9-secondary";star.textContent=favorite?"★ Saved":"☆ Favourite";star.setAttribute("aria-pressed",String(Boolean(favorite)));star.onclick=()=>updateSaved(slug,{favorite:!favorite});
   edit.textContent="Edit title & notes";edit.onclick=()=>{const titleInput=document.createElement("input"),noteInput=document.createElement("textarea"),save=document.createElement("button"),cancel=document.createElement("button");titleInput.value=title||"Saved track";titleInput.maxLength=160;titleInput.setAttribute("aria-label","Production title");noteInput.value=notes||"";noteInput.maxLength=2000;noteInput.setAttribute("aria-label","Production notes");save.type=cancel.type="button";save.textContent="Save";cancel.textContent="Cancel";save.onclick=()=>updateSaved(slug,{title:titleInput.value.trim()||"Saved track",notes:noteInput.value.trim()});cancel.onclick=renderHistory;info.replaceChildren(titleInput,noteInput,save,cancel);};
   if(notes){const note=document.createElement("p");note.textContent=notes;info.append(note)}
-  actions.append(button,star,edit);item.append(info,actions);el.append(item);
+  actions.append(button,star,edit);if(requestSettings){const reuse=document.createElement("button");reuse.type="button";reuse.className="v9-secondary";reuse.textContent="Reuse musical settings";reuse.disabled=busy||submitting||Boolean(pendingSlug);reuse.onclick=()=>restoreSettings(requestSettings);actions.append(reuse);}item.append(info,actions);el.append(item);
  }
 }
 $("library-search").addEventListener("input",renderHistory);
