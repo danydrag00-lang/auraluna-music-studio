@@ -14,6 +14,7 @@ function validate(r){
  if(r.instruments!==undefined){if(!Array.isArray(r.instruments)||r.instruments.some(x=>!instruments.includes(x))||new Set(r.instruments).size!==r.instruments.length)throw Error("Invalid instruments");out.instruments=r.instruments}
  if(r.nature!==undefined){if(!nature.includes(r.nature))throw Error("Invalid ambience");out.nature=r.nature}
  if(r.gains!==undefined){if(!r.gains||typeof r.gains!=="object"||Array.isArray(r.gains)||Object.entries(r.gains).some(([k,v])=>!out.instruments?.includes(k)||typeof v!=="number"||!Number.isFinite(v)||v< -60||v>12))throw Error("Invalid gains");out.gains=r.gains}
+ if(r.nature_layers!==undefined){const l=r.nature_layers;if(!l||typeof l!=="object"||Array.isArray(l)||Object.entries(l).some(([k,v])=>!nature.includes(k)||k==="none"||typeof v!=="number"||!Number.isFinite(v)||v< -30||v>6))throw Error("Invalid nature mixer");out.nature_layers=l;out.nature=Object.keys(l)[0]||"none"}
  if(out.instruments?.length===0&&out.nature==="none")throw Error("Choose a sound source");
  if(!["independent","thematic"].includes(out.composition))throw Error("Invalid composition style");
  if(!["aria","fast"].includes(out.engine))throw Error("Invalid composition engine");
@@ -61,7 +62,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V15-composition-styles",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V16-nature-mixer",configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -93,7 +94,7 @@ export default {async fetch(req,env){
     // A script kernel keeps submitted source small; no credentials in notebook source.
     const result=await call("SaveKernel",{slug:env.KAGGLE_USERNAME+"/"+slug,newTitle:title,text:source,language:"python",kernelType:"script",isPrivate:true,enableGpu:needsGpu,enableTpu:false,...(needsGpu?{machineShape:"NvidiaTeslaT4"}:{}),enableInternet:true,datasetDataSources:[env.KAGGLE_DATASET],kernelDataSources:[],competitionDataSources:[],modelDataSources:[]});
     if(!result.ref&&!result.kernelId)throw Error("Kaggle did not confirm notebook creation");
-    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",composition:r.engine==="fast"&&!natureOnly?r.composition:null},202);
+    return reply({job:r.job,slug,version:result.versionNumber??null,status:"submitted",compute:needsGpu?"GPU":"CPU",natureLayers:r.nature_layers??null,composition:r.engine==="fast"&&!natureOnly?r.composition:null},202);
   }
   const slug=url.searchParams.get("slug")||"";
   if(!/^auraluna-[a-f0-9]{32}$/.test(slug))return reply({error:"Invalid production slug"},400);
