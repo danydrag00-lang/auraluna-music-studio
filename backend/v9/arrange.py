@@ -201,12 +201,16 @@ for name,ns in parts.items():
                 if fade:segment[-fade:]*=np.linspace(1,0,fade)[:,None]
                 x[start:start+len(segment)]+=segment
             report[name]=len(starts)
-        mix+=place(balance(x,levels[name])*10**(gains.get(name,0)/20),name)
+        x=place(balance(x,levels[name])*10**(gains.get(name,0)/20),name)
+        if os.environ.get("AURALUNA_STEMS")=="1":sf.write(out/("stem_"+name+".flac"),x,SR,subtype="PCM_24")
+        mix+=x
         continue
     if not ns:raise RuntimeError("No playable notes for selected instrument: "+name)
     x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
     x=balance(x,levels[name])*10**(gains.get(name,0)/20)
-    mix+=place(x,name)
+    x=place(x,name)
+    if os.environ.get("AURALUNA_STEMS")=="1":sf.write(out/("stem_"+name+".flac"),x,SR,subtype="PCM_24")
+    mix+=x
     report[name]=len(ns)
 # Light synthetic room impulse, applied only as an effect to real samples.
 ir_t=np.arange(SR*2)/SR
