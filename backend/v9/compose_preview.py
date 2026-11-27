@@ -64,7 +64,7 @@ if not 15<=a.seconds<=(120 if a.engine=="fast" else 60):p.error("Unsupported com
 root=Path(os.environ.get("AURALUNA_ROOT","/kaggle/working/Auraluna-V9"))
 out=root/"productions"/uuid.uuid4().hex[:12]
 out.mkdir(parents=True)
-rng=np.random.default_rng()
+rng=np.random.default_rng(int(os.environ["AURALUNA_PERFORMANCE_SEED"]) if "AURALUNA_PERFORMANCE_SEED" in os.environ else None)
 sr=48000
 if a.engine=="fast":
     # Section-aware composition: recurring motifs, gentle breathing space, stable tonal centre.
