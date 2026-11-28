@@ -44,7 +44,7 @@ p.add_argument("--nature-layers",default=None)
 p.add_argument("--nature",choices=["none","rain","river","ocean","forest"],default=None)
 a=p.parse_args()
 gains=json.loads(a.gains)
-allowed={"felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls"}
+allowed={"felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls","clarinet","oboe","bassoon"}
 if not isinstance(gains,dict) or any(k not in allowed or not isinstance(v,(int,float)) or not math.isfinite(v) or not -60<=v<=12 for k,v in gains.items()):p.error("Invalid instrument gains")
 if a.instruments and not set(a.instruments.split(","))<=allowed:p.error("Invalid instruments")
 if not 15<=a.seconds<=43200 or a.max_sections<1: p.error("Duration 15–43200 seconds; positive max-sections")

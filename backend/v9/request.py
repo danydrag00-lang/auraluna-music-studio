@@ -15,7 +15,7 @@ PRESETS={
 "indian_meditation":(["bansuri","singing_bowls"],"river"),
 "rain_sleep":([],"rain"),"ocean_sleep":([],"ocean"),
 "forest_relaxation":([],"forest"),"river_relaxation":([],"river")}
-ALIASES={"felt_piano":r"felt piano|soft piano","grand_piano":r"grand piano|acoustic piano","flute":r"\bflute\b","cello":r"\bcello\b","harp":r"\bharp\b","handpan":r"\bhandpan\b","bansuri":r"\bbansuri\b|bamboo flute","singing_bowls":r"singing bowls?|tibetan bowls?"}
+ALIASES={"felt_piano":r"felt piano|soft piano","grand_piano":r"grand piano|acoustic piano","flute":r"\bflute\b","cello":r"\bcello\b","harp":r"\bharp\b","handpan":r"\bhandpan\b","bansuri":r"\bbansuri\b|bamboo flute","singing_bowls":r"singing bowls?|tibetan bowls?","clarinet":r"\bclarinet\b","oboe":r"\boboe\b","bassoon":r"\bbassoon\b"}
 NATURE={"rain","river","ocean","forest","none"}
 def normalize(r):
     if not isinstance(r,dict):raise ValueError("Expected JSON object")
@@ -63,6 +63,7 @@ def normalize(r):
     if not isinstance(gains,dict) or any(k not in instruments or type(v) not in (int,float) or not math.isfinite(v) or not -60<=v<=12 for k,v in gains.items()):raise ValueError("Invalid gain offsets")
     engine=r.get("engine","aria")
     if engine not in ("aria","fast","studio"):raise ValueError("Invalid composition engine")
+    if set(instruments)&{"clarinet","oboe","bassoon"} and (engine not in ("fast","studio") or seconds*variations>180 or r.get("extension") or r.get("regenerate")):raise ValueError("Experimental woodwinds: Fast/Studio, 3 total minutes maximum, no extension or regeneration")
     composition=r.get("composition","independent")
     if composition not in ("independent","thematic"):raise ValueError("Invalid composition style")
     tuning=r.get("tuning","standard")

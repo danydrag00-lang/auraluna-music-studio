@@ -57,8 +57,9 @@ started_job=time.monotonic()
 print("AURALUNA STAGE: restoring acoustic assets",flush=True)
 inputs=Path("/kaggle/input")
 # Restore only assets needed by this request. Keep all attribution records.
+woodwinds=set(r["instruments"])&{"clarinet","oboe","bassoon"}
 categories=["licenses"]
-if r["instruments"]:categories.extend("instruments/"+name for name in r["instruments"])
+if r["instruments"]:categories.extend("instruments/"+name for name in r["instruments"] if name not in woodwinds)
 categories.extend("nature/"+name for name in r.get("nature_layers",{}))
 if not nature_only and not fast:categories.append("models/model.safetensors")
 required=tuple(categories)
@@ -116,7 +117,11 @@ print("Using asset root:",source,flush=True)
 for name in ("instruments","nature","licenses","models"):
     target=root/name
     if not target.exists():
-        if (source/name).exists():target.symlink_to(source/name,target_is_directory=True)
+        if woodwinds and name in ("instruments","licenses"):
+            target.mkdir(parents=True,exist_ok=True)
+            if (source/name).exists():
+                for child in (source/name).iterdir():(target/child.name).symlink_to(child,target_is_directory=child.is_dir())
+        elif (source/name).exists():target.symlink_to(source/name,target_is_directory=True)
         else:target.mkdir(parents=True,exist_ok=True)
 
 for name in required:
@@ -135,6 +140,9 @@ if nature_only:
     print("PERF nature-only: skipped Aria, model setup and FluidSynth",flush=True)
 else:
     subprocess.run([sys.executable,str(engine/"bootstrap.py")]+(["--acoustic-only"] if fast else []),check=True)
+if woodwinds:
+    from woodwind_bank import install
+    install(root,woodwinds)
 print(f"PERF total bootstrap: {time.monotonic()-started:.1f}s",flush=True)
 print("Starting",r["job"],flush=True)
 job=root/"jobs"/r["job"]

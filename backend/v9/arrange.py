@@ -24,7 +24,7 @@ if not isinstance(gains,dict) or any(not isinstance(v,(int,float)) or not math.i
 root=Path(a.root)
 assert 15<=a.seconds<=300
 names=a.instruments.split(",")
-assert names and len(set(names))==len(names) and set(names)<=set(["felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls"])
+assert names and len(set(names))==len(names) and set(names)<=set(["felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls","clarinet","oboe","bassoon"])
 src=Path(a.midi) if a.midi else max((root/"productions").rglob("arrangement.mid"),key=lambda p:p.stat().st_mtime)
 out=src.parent/"ensemble"
 out.mkdir(exist_ok=True)
@@ -74,6 +74,15 @@ for t in np.arange(0,a.seconds-1,4):
         choices=[p for p in range(65,82) if p%12 in pcs]
         pitch=min(choices,key=lambda p:abs(p-last)+rng.uniform(0,4))
         parts["flute"].append(note(pitch,t+.6,t+float(rng.uniform(2.5,3.4)),rng.integers(39,49))); last=pitch
+    for wind,lo,hi in (("clarinet",55,77),("oboe",60,80),("bassoon",40,65)):
+        if wind not in parts:continue
+        if parts[wind] and rng.random()<.25:continue
+        candidates=[p for p in range(lo,hi) if p%12 in pcs]
+        if wind=="bassoon":candidates=[p for p in candidates if p%12==bass%12] or candidates
+        if candidates:
+            prior=parts[wind][-1].pitch if parts[wind] else (lo+hi)//2
+            pitch=min(candidates,key=lambda p:abs(p-prior)+rng.uniform(0,3))
+            parts[wind].append(note(pitch,t+.45,t+2.9,rng.integers(32,49)))
     if "harp" in parts and (not parts["harp"] or rng.random()<.70):
         choices=sorted({next(p for p in range(60,72) if p%12==pc) for pc in pcs})
         for j,p in enumerate(choices[:3]):
@@ -151,10 +160,10 @@ def balance(x,db,cap=8):
     if not np.isfinite(rms) or rms<1e-8:raise RuntimeError("Silent or invalid track")
     return x*min(cap,10**(db/20)/rms)
 mix=np.zeros((frames,2),np.float32)
-levels={"felt_piano":-30,"grand_piano":-30,"flute":-36,"cello":-38,"harp":-37,"handpan":-31,"bansuri":-31,"singing_bowls":-39}
+levels={"felt_piano":-30,"grand_piano":-30,"flute":-36,"cello":-38,"harp":-37,"handpan":-31,"bansuri":-31,"singing_bowls":-39,"clarinet":-37,"oboe":-39,"bassoon":-38}
 report={}
 # Subtle gain-only placement keeps stereo recordings intact and avoids phase widening.
-positions={"felt_piano":0,"grand_piano":0,"flute":.17,"cello":-.16,"harp":.12,"handpan":-.08,"bansuri":.10,"singing_bowls":-.07}
+positions={"felt_piano":0,"grand_piano":0,"flute":.17,"cello":-.16,"harp":.12,"handpan":-.08,"bansuri":.10,"singing_bowls":-.07,"clarinet":.13,"oboe":-.12,"bassoon":-.09}
 def place(x,name):
     pan=positions[name]
     x[:,0]*=math.sqrt(1-pan);x[:,1]*=math.sqrt(1+pan)
@@ -210,7 +219,10 @@ for name,ns in parts.items():
         mix+=x
         continue
     if not ns:raise RuntimeError("No playable notes for selected instrument: "+name)
-    x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
+    if name in ("clarinet","oboe","bassoon"):
+        from woodwind_bank import render
+        x=render(root,name,ns,frames,rng)
+    else:x=felt(ns) if name=="felt_piano" else acoustic(name,ns) if name in ("flute","cello") else font_render(name,ns)
     x=balance(x,levels[name])*10**(gains.get(name,0)/20)
     x=place(x,name)
     if os.environ.get("AURALUNA_STEMS")=="1":sf.write(out/("stem_"+name+".flac"),x,SR,subtype="PCM_24")
@@ -249,7 +261,7 @@ if not a.section:
 arr=pm.PrettyMIDI()
 for name,ns in parts.items():
     if not ns:continue
-    i=pm.Instrument({"felt_piano":0,"grand_piano":0,"harp":46,"cello":42,"flute":73,"handpan":114}[name],name=name);i.notes=ns;arr.instruments.append(i)
+    i=pm.Instrument({"felt_piano":0,"grand_piano":0,"harp":46,"cello":42,"flute":73,"handpan":114,"clarinet":71,"oboe":68,"bassoon":70}[name],name=name);i.notes=ns;arr.instruments.append(i)
 arr.write(str(out/"ensemble.mid"))
 licences=[]
 for p in (root/"licenses").glob("*.json"):

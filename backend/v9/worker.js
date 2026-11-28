@@ -2,7 +2,7 @@ const ORIGIN="https://danydrag00-lang.github.io";
 const API="https://api.kaggle.com/v1/kernels.KernelsApiService/";
 const BASE="https://raw.githubusercontent.com/danydrag00-lang/auraluna-music-studio/main/backend/v9/";
 const presets=["luxury_spa","deep_sleep","meditation","study_focus","emotional_relaxation","peaceful_piano","yoga_zen","indian_meditation","rain_sleep","ocean_sleep","forest_relaxation","river_relaxation"];
-const instruments=["felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls"];
+const instruments=["felt_piano","grand_piano","flute","cello","harp","handpan","bansuri","singing_bowls","clarinet","oboe","bassoon"];
 const nature=["none","rain","river","ocean","forest"];
 function validate(r){
  if(!r||typeof r!=="object"||Array.isArray(r))throw Error("Invalid request");
@@ -30,6 +30,7 @@ function validate(r){
  if(natureOnly&&out.variations!==1)throw Error("Nature-only mode supports one variation.");
  if(out.seconds*out.variations>(natureOnly?43200:out.engine==="aria"?900:3600))throw Error("Combined duration exceeds the per-job limit.");
  if(out.seconds>900&&!["mp3","m4a"].includes(out.format))throw Error("For tracks longer than 15 minutes, choose MP3 or YouTube Ready AAC.");
+ if(out.instruments?.some(x=>['clarinet','oboe','bassoon'].includes(x))&&(!['fast','studio'].includes(out.engine)||out.seconds*out.variations>180||r.extension||r.regenerate))throw Error('Experimental woodwinds require Fast or Studio, up to 3 total minutes, no extension or regeneration.');
  if(r.extension!==undefined){
   const e=r.extension;
   if(!e||typeof e!=="object"||!/^auraluna-[a-f0-9]{32}$/.test(e.slug)||![1,2,3].includes(e.variation)||!["wav","flac"].includes(e.format)||out.format!=="flac"||out.variations!==1||out.seconds<75||out.seconds>900)throw Error("Extension requires a 60-second lossless preview, one FLAC output and total duration 75–900 seconds.");
@@ -79,7 +80,7 @@ export default {async fetch(req,env){
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
  const url=new URL(req.url);
  const configured=Boolean(env.KAGGLE_USERNAME&&env.KAGGLE_API_TOKEN&&env.AURALUNA_ACCESS_KEY);
- if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V32-smooth-join",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
+ if(url.pathname==="/"||url.pathname==="/health")return reply({service:"Auraluna",version:"V33-woodwind-beta",archiveConfigured:Boolean(env.AURALUNA_ARCHIVE),configured,datasetConfigured:Boolean(env.KAGGLE_DATASET),cpuRouting:true});
  if(!configured)return reply({error:"Credentials missing"},503);
  if(req.headers.get("Authorization")!=="Bearer "+env.AURALUNA_ACCESS_KEY)return reply({error:"Unauthorised"},401);
  async function call(method,data){
@@ -121,7 +122,7 @@ export default {async fetch(req,env){
       "from pathlib import Path",
       "engine = Path('/kaggle/temp/v9-engine')",
       "engine.mkdir(parents=True, exist_ok=True)",
-      "for name in ['bootstrap.py','compose_preview.py','arrange.py','produce.py','request.py','cloud_runner.py']:",
+      "for name in ['bootstrap.py','compose_preview.py','arrange.py','produce.py','request.py','cloud_runner.py','stage_orchestra_expansion.py','pitch_woodwinds.py','woodwind_bank.py']:",
       "    urllib.request.urlretrieve("+JSON.stringify(BASE)+" + name, engine / name)",
       "request = engine / 'job.json'",
       "request.write_text("+payload+")",
@@ -223,13 +224,13 @@ export default {async fetch(req,env){
   }
   if(url.pathname==="/outputs"&&req.method==="GET"){
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
-    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|score\.mid|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(f.fileName||""));
+    const files=(result.files||[]).filter(f=>/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|score\.mid|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls|clarinet|oboe|bassoon)\.flac)$/.test(f.fileName||""));
     // Return names only; signed output URLs must be requested separately.
     return reply({files:files.map(f=>({name:f.fileName}))});
   }
   if(["/download","/file"].includes(url.pathname)&&req.method==="GET"){
     const name=url.searchParams.get("file")||"";
-    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|score\.mid|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls)\.flac)$/.test(name))return reply({error:"Invalid output file"},400);
+    if(!/^results\/variation_[1-3]_(music\.(mp3|m4a|wav|flac)|licences\.json|completed\.json|score\.mid|stem_(felt_piano|grand_piano|flute|cello|harp|handpan|bansuri|singing_bowls|clarinet|oboe|bassoon)\.flac)$/.test(name))return reply({error:"Invalid output file"},400);
     const result=await call("ListKernelSessionOutput",{...query,pageSize:100});
     const file=(result.files||[]).find(f=>f.fileName===name);
     if(!file?.url)return reply({error:"Output not available"},404);
