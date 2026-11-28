@@ -5,7 +5,8 @@ import soundfile as sf
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"backend/v9"))
 from audit_assets import audit
 from request import normalize
-from join_parts import smooth_filter
+from join_parts import smooth_filter, smooth_join
+import subprocess, shutil, json
 class Checks(unittest.TestCase):
     def test_request(self):
         r=normalize(dict(job="Test01",instruments=["flute"],nature_layers={},seconds=60,engine="studio",format="flac"))
@@ -27,6 +28,31 @@ class Checks(unittest.TestCase):
         self.assertEqual(graph.count("acrossfade=d=12:c1=tri:c2=tri"),11)
         self.assertEqual(last,"[mix11]")
         with self.assertRaises(ValueError):smooth_filter(13)
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),"FFmpeg unavailable")
+    def test_actual_transition_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            sr=48000
+            seconds=6
+            time=np.arange(sr*seconds)/sr
+            paths=[]
+            for i,freq in enumerate((220,330,440)):
+                wave=.12*np.sin(2*np.pi*freq*time)
+                path=root/f"part{i}.wav"
+                sf.write(path,np.column_stack((wave,wave)),sr,subtype="PCM_24")
+                paths.append(path)
+            for fmt,rate in (("m4a","256k"),("mp3","320k")):
+                out=root/("mix."+fmt)
+                smooth_join(paths,out,fmt,rate,2)
+                decoded=subprocess.check_output(["ffmpeg","-v","error","-i",str(out),"-f","f32le","-acodec","pcm_f32le","-"])
+                samples=np.frombuffer(decoded,dtype="<f4").reshape(-1,2)
+                self.assertLess(abs(len(samples)/sr-14),.1)
+                self.assertTrue(np.isfinite(samples).all())
+                self.assertLess(np.max(np.abs(samples)),.85)
+                for center in (5,9):
+                    part=samples[int((center-.5)*sr):int((center+.5)*sr)]
+                    self.assertGreater(np.sqrt(np.mean(part**2)),.025)
+                print("Transition fixture",fmt,"seconds",len(samples)/sr,"peak",float(np.max(np.abs(samples))))
     def test_pcm24_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/"test.flac"
