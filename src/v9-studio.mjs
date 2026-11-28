@@ -332,8 +332,9 @@ async function renderArchive(){
   }
  }catch(e){list.textContent="Local archive unavailable: "+e.message}
 }
+function stemHeadroom(tracks){return Math.min(1,.85/Math.max(.000001,tracks.reduce((sum,t)=>sum+t.peak,0)))}
 async function exportStemMix(tracks,duration,rate){
- const n=Math.floor(duration*rate),ctx=new OfflineAudioContext(2,n,rate),solo=tracks.some(t=>t.solo),master=ctx.createGain();master.gain.value=1/Math.max(1,tracks.length);master.connect(ctx.destination);
+ const n=Math.floor(duration*rate),ctx=new OfflineAudioContext(2,n,rate),solo=tracks.some(t=>t.solo),master=ctx.createGain();master.gain.value=stemHeadroom(tracks);master.connect(ctx.destination);
  for(const t of tracks){if(t.mute||(solo&&!t.solo))continue;const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=t.buffer;gain.gain.value=10**(t.db/20);source.connect(gain);gain.connect(master);source.start(0)}
  const mix=await ctx.startRendering(),bytes=new ArrayBuffer(44+n*6),v=new DataView(bytes);
  const tag=(p,s)=>{for(let i=0;i<s.length;i++)v.setUint8(p+i,s.charCodeAt(i))};
@@ -390,8 +391,8 @@ function mountStemEditor(row,slug,files,canRegenerate=false){
  const note=document.createElement("p");note.className="hint";note.textContent="Dry acoustic stems before shared mastering. Nature and room effects are not included. Up to 60 seconds.";panel.append(note);
  const load=document.createElement("button");load.type="button";load.textContent="Load instrument tracks";panel.append(load);
  const status=document.createElement("p");status.setAttribute("role","status");panel.append(status);
- row.append(panel);let ctx,tracks=[],sources=[],start=0,offset=0,playing=false,duration=0,raf=0;
- const stop=()=>{if(playing){offset=Math.min(duration,offset+ctx.currentTime-start);playing=false}for(const s of sources){try{s.stop()}catch{}}sources=[];cancelAnimationFrame(raf)};
+ row.append(panel);let ctx,tracks=[],sources=[],start=0,offset=0,playing=false,duration=0,raf=0,starting=false;
+ const stop=()=>{if(playing){offset=Math.max(0,Math.min(duration,offset+ctx.currentTime-start));playing=false}for(const s of sources){try{s.stop();s.disconnect()}catch{}}sources=[];for(const t of tracks){t.gain?.disconnect();t.gain=null}cancelAnimationFrame(raf)};
  const observer=new MutationObserver(()=>{if(!row.isConnected){stop();ctx?.close().catch(()=>{});observer.disconnect()}});observer.observe($("players"),{childList:true,subtree:true});
  load.onclick=async()=>{
   load.disabled=true;status.textContent="Loading lossless tracks…";
@@ -402,23 +403,25 @@ function mountStemEditor(row,slug,files,canRegenerate=false){
     if(!r.ok)throw Error("Track HTTP "+r.status);
     const length=Number(r.headers.get("content-length")||0);if(length>30*1024*1024)throw Error("Track exceeds editor limit");
     const blob=await r.blob();if(blob.size>30*1024*1024)throw Error("Track exceeds editor limit");
-    const b=await ctx.decodeAudioData(await blob.arrayBuffer());if(b.duration>61||b.numberOfChannels!==2)throw Error("Invalid editor track");
+    let b;try{b=await ctx.decodeAudioData(await blob.arrayBuffer())}catch{throw Error("This browser cannot decode the lossless FLAC stem. Try current Chrome or Edge.")}
+    if(b.duration>61||b.numberOfChannels!==2)throw Error("Invalid editor track");
     if(!row.isConnected)throw Error("Track selection changed");
-    tracks.push({name:file.name.match(/stem_(.+)\.flac$/)[1],buffer:b,db:0,mute:false,solo:false,gain:null});
+    let peak=0;for(let c=0;c<b.numberOfChannels;c++)for(const x of b.getChannelData(c))peak=Math.max(peak,Math.abs(x));
+    tracks.push({name:file.name.match(/stem_(.+)\.flac$/)[1],buffer:b,peak,db:0,mute:false,solo:false,gain:null});
    }
-   duration=Math.min(...tracks.map(t=>t.buffer.duration));const master=ctx.createGain();master.gain.value=1/Math.max(1,tracks.length);master.connect(ctx.destination);
+   duration=Math.min(...tracks.map(t=>t.buffer.duration));if(!Number.isFinite(duration)||duration<=0||tracks.some(t=>Math.abs(t.buffer.duration-duration)>.05))throw Error("Stem durations do not match");const master=ctx.createGain();master.gain.value=stemHeadroom(tracks);master.connect(ctx.destination);
    const update=()=>{const solo=tracks.some(t=>t.solo);for(const t of tracks)if(t.gain)t.gain.gain.setTargetAtTime(t.mute||(solo&&!t.solo)?0:10**(t.db/20),ctx.currentTime,.02)};
    const transport=document.createElement("div");transport.className="v9-actions";
    const play=document.createElement("button"),pause=document.createElement("button"),reset=document.createElement("button"),seek=document.createElement("input");
    for(const b of [play,pause,reset])b.type="button";
    play.textContent="Play mix";pause.textContent="Pause";reset.textContent="Restart";seek.type="range";seek.min=0;seek.max=duration;seek.step=.1;seek.value=0;seek.setAttribute("aria-label","Timeline position");
    const tick=()=>{if(!playing)return;const p=offset+ctx.currentTime-start;seek.value=Math.min(duration,p);if(p>=duration){stop();offset=0;seek.value=0;return}raf=requestAnimationFrame(tick)};
-   const begin=async()=>{if(playing)return;if(offset>=duration)offset=0;await ctx.resume();for(const a of $("players").querySelectorAll("audio"))a.pause();start=ctx.currentTime+.03;for(const t of tracks){const s=ctx.createBufferSource();s.buffer=t.buffer;t.gain=ctx.createGain();s.connect(t.gain);t.gain.connect(master);s.start(start,offset);sources.push(s)}playing=true;update();tick()};
+   const begin=async()=>{if(playing||starting)return;starting=true;try{if(offset>=duration)offset=0;await ctx.resume();if(!row.isConnected)return;for(const a of $("players").querySelectorAll("audio"))a.pause();start=ctx.currentTime+.03;for(const t of tracks){const s=ctx.createBufferSource();s.buffer=t.buffer;t.gain=ctx.createGain();s.connect(t.gain);t.gain.connect(master);s.start(start,offset);sources.push(s)}playing=true;update();tick()}catch(e){stop();status.textContent="Playback failed: "+e.message}finally{starting=false}};
    play.onclick=()=>void begin();pause.onclick=stop;reset.onclick=()=>{stop();offset=0;seek.value=0};seek.oninput=()=>{const resume=playing;stop();offset=Number(seek.value);if(resume)void begin()};
    const exportMix=document.createElement("button");exportMix.type="button";exportMix.textContent="Export edited mix · 24-bit WAV";exportMix.onclick=async()=>{exportMix.disabled=true;try{const blob=await exportStemMix(tracks,duration,ctx.sampleRate);saveBlob(blob,slug+"-edited-mix.wav");status.textContent="Edited dry mix exported at "+ctx.sampleRate+" Hz."}catch(e){status.textContent=e.message}finally{exportMix.disabled=false}};
    transport.append(play,pause,reset,exportMix);panel.append(transport,seek);
-   for(const t of tracks){const lane=document.createElement("div");lane.className="v9-track";const label=document.createElement("strong");label.textContent=t.name.replaceAll("_"," ");const vol=document.createElement("input");vol.type="range";vol.min=-30;vol.max=0;vol.step=1;vol.value=0;vol.setAttribute("aria-label",t.name+" volume");const mute=document.createElement("button"),solo=document.createElement("button");for(const b of [mute,solo]){b.type="button";b.setAttribute("aria-pressed","false")}mute.textContent="Mute";solo.textContent="Solo";vol.oninput=()=>{t.db=Number(vol.value);update()};mute.onclick=()=>{t.mute=!t.mute;mute.setAttribute("aria-pressed",String(t.mute));update()};solo.onclick=()=>{t.solo=!t.solo;solo.setAttribute("aria-pressed",String(t.solo));update()};lane.append(label,vol,mute,solo);if(canRegenerate){const regen=document.createElement("button");regen.type="button";regen.textContent="Regenerate";regen.onclick=()=>{if(busy||submitting||pendingSlug){status.textContent="Finish the active production first.";return}const saved=history().find(x=>x.slug===slug);if(!saved?.seconds||saved.seconds>60){status.textContent="Original duration not available.";return}stop();const settings=saved.requestSettings||{};restoreSettings({...settings,engine:"fast",instruments:[t.name],nature_layers:{},gains:{[t.name]:settings.gains?.[t.name]||0},format:"flac",tuning:"standard",seed:"",seed_variation:1,mastering:"original"});$("duration").value=String(saved.seconds/60);regenerationSelection={slug,variation:Number(files[0].name.match(/variation_(\d+)/)?.[1]||1),instrument:t.name,seconds:saved.seconds};$("extension-status").textContent="Regenerate "+t.name+" only. Other dry stems preserved. Press Generate Music to submit.";refresh()};lane.append(regen)}panel.append(lane)}
-   status.textContent=tracks.length+" tracks loaded. Preview mix uses conservative headroom.";
+   for(const t of tracks){const lane=document.createElement("div");lane.className="v9-track";const label=document.createElement("strong");label.textContent=t.name.replaceAll("_"," ");const vol=document.createElement("input");vol.type="range";vol.min=-30;vol.max=0;vol.step=1;vol.value=0;vol.setAttribute("aria-label",t.name+" volume");const mute=document.createElement("button"),solo=document.createElement("button");for(const b of [mute,solo]){b.type="button";b.setAttribute("aria-pressed","false")}mute.textContent="Mute";solo.textContent="Solo";vol.oninput=()=>{t.db=Number(vol.value);update()};mute.onclick=()=>{t.mute=!t.mute;mute.setAttribute("aria-pressed",String(t.mute));update()};solo.onclick=()=>{t.solo=!t.solo;solo.setAttribute("aria-pressed",String(t.solo));update()};lane.append(label,vol,mute,solo);if(canRegenerate&&!["clarinet","oboe","bassoon"].includes(t.name)){const regen=document.createElement("button");regen.type="button";regen.textContent="Regenerate";regen.onclick=()=>{if(busy||submitting||pendingSlug){status.textContent="Finish the active production first.";return}const saved=history().find(x=>x.slug===slug);if(!saved?.seconds||saved.seconds>60){status.textContent="Original duration not available.";return}stop();const settings=saved.requestSettings||{};restoreSettings({...settings,engine:"fast",instruments:[t.name],nature_layers:{},gains:{[t.name]:settings.gains?.[t.name]||0},format:"flac",variations:1,tuning:"standard",seed:"",seed_variation:1,mastering:"original"});$("duration").value=String(saved.seconds/60);regenerationSelection={slug,variation:Number(files[0].name.match(/variation_(\d+)/)?.[1]||1),instrument:t.name,seconds:saved.seconds};$("extension-status").textContent="Regenerate "+t.name+" only. Other dry stems preserved. Press Generate Music to submit.";refresh()};lane.append(regen)}panel.append(lane)}
+   status.textContent=tracks.length+" tracks loaded. Preview and exported dry mix use matching peak-based headroom.";
    load.hidden=true;
   }catch(e){stop();await ctx?.close().catch(()=>{});tracks=[];status.textContent=e.message;load.disabled=false}
  };
@@ -453,7 +456,7 @@ async function addFile(slug,name,files=[]){
  }
  $("players").append(row);
  const stemFiles=files.filter(f=>f.name.startsWith(name.replace(/music\.[^.]+$/,"stem_"))&&f.name.endsWith(".flac"));
- if(stemFiles.length)mountStemEditor(row,slug,stemFiles,files.some(f=>f.name===name.replace(/music\.[^.]+$/,"score.mid")));
+ if(stemFiles.length)mountStemEditor(row,slug,stemFiles,files.some(f=>f.name===name.replace(/music\.[^.]+$/,"score.mid")));else{const hint=document.createElement("p");hint.className="hint";hint.textContent="Multitrack editor unavailable for this output. Generate one instrumental variation, 15–60 seconds, standard tuning (use Generate Music, not three-variation Preview). Nature-only tracks and cloud archive audio do not include editable stems.";row.append(hint)}
  const analyse=saved?.preview&&saved.seconds<=90?mountPreviewWaveform(row,player):null;
  let analysedURL="";
  let objectURL="",loading=null;

@@ -1,10 +1,10 @@
 const {chromium}=require('playwright');
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 // Exercise the canonical cloud studio without spending Kaggle quota or using real secrets.
-function fixtureWav(seconds=60){
- const rate=8000,n=rate*seconds,b=Buffer.alloc(44+n*2);
- b.write('RIFF',0);b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(rate,24);b.writeUInt32LE(rate*2,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(n*2,40);
- for(let i=0;i<n;i++)b.writeInt16LE(Math.round(3000*Math.sin(2*Math.PI*220*i/rate)),44+2*i);
+function fixtureWav(seconds=60,channels=1){
+ const rate=8000,n=rate*seconds,b=Buffer.alloc(44+n*2*channels);
+ b.write('RIFF',0);b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(channels,22);b.writeUInt32LE(rate,24);b.writeUInt32LE(rate*2*channels,28);b.writeUInt16LE(2*channels,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(n*2*channels,40);
+ for(let i=0;i<n;i++)for(let c=0;c<channels;c++)b.writeInt16LE(Math.round(3000*Math.sin(2*Math.PI*220*i/rate)),44+2*(i*channels+c));
  return b;
 }
 (async()=>{
@@ -26,6 +26,8 @@ function fixtureWav(seconds=60){
   page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message)});
   const slug='auraluna-'+'a'.repeat(32),wave=fixtureWav();
   const files=[1,2,3].flatMap(v=>['music.wav','completed.json','licences.json'].map(name=>({name:'results/variation_'+v+'_'+name})));
+  files.push({name:'results/variation_1_stem_felt_piano.flac'},{name:'results/variation_1_stem_harp.flac'});
+  const stereo=fixtureWav(60,2);
   await page.route('https://auraluna-api.dhanushmanoharan1996.workers.dev/**',async route=>{
    const req=route.request(),u=new URL(req.url());
    const headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type','access-control-allow-methods':'GET, POST, OPTIONS'};
@@ -37,6 +39,7 @@ function fixtureWav(seconds=60){
    if(u.pathname==='/generate'){requests.push(req.postDataJSON());return json({slug,compute:'CPU',seed:'SmokeSeed',seedVariation:1,composition:'thematic',aacMode:'premium',tuning:'standard'});}
    if(u.pathname==='/status')return json({status:'COMPLETE'});
    if(u.pathname==='/outputs')return json({files});
+   if(u.pathname==='/file'&&u.searchParams.get('file')?.endsWith('.flac'))return route.fulfill({status:200,headers,contentType:'audio/wav',body:stereo});
    if(u.pathname==='/file'&&u.searchParams.get('file')?.endsWith('.wav'))return route.fulfill({status:200,headers,contentType:'audio/wav',body:wave});
    return route.fulfill({status:404,headers,body:'Unexpected mocked endpoint: '+u.pathname});
   });
@@ -61,6 +64,7 @@ function fixtureWav(seconds=60){
   const metrics=await page.locator('#players audio').first().evaluate(async a=>{const ctx=new AudioContext();try{const b=await ctx.decodeAudioData(await(await fetch(a.src)).arrayBuffer());let peak=0,sum=0,n=0;for(const x of b.getChannelData(0)){peak=Math.max(peak,Math.abs(x));sum+=x*x;n++;}return {duration:b.duration,peak,rms:Math.sqrt(sum/n)}}finally{await ctx.close()}});
   assert.ok(Math.abs(metrics.duration-60)<.01);assert.ok(metrics.peak>.001&&metrics.peak<.99);assert.ok(metrics.rms>.0001);
   await page.waitForFunction(()=>document.querySelector('#players .v9-waveform input:not(:disabled)'));
+  stage='multitrack editor';await page.getByText('Multitrack instrument editor (beta)',{exact:true}).first().click();await page.getByRole('button',{name:'Load instrument tracks'}).first().click();await page.getByText('2 tracks loaded. Preview and exported dry mix use matching peak-based headroom.',{exact:true}).waitFor();await page.getByRole('button',{name:'Play mix',exact:true}).first().click();await page.getByRole('button',{name:'Mute',exact:true}).first().click();assert.equal(await page.getByRole('button',{name:'Mute',exact:true}).first().getAttribute('aria-pressed'),'true');await page.getByRole('button',{name:'Pause',exact:true}).first().click();const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Export edited mix · 24-bit WAV',exact:true}).first().click()]);assert.match(download.suggestedFilename(),/edited-mix\.wav$/);await page.getByRole('button',{name:'Restart',exact:true}).first().click();
   stage='archive preview';await page.getByRole('button',{name:'Save audio locally',exact:true}).first().click();
   await page.waitForFunction(()=>document.querySelector('#archive-list').textContent.includes('variation_1_music.wav'));
   assert.equal(errors.length,0,errors.join('; '));
