@@ -1,0 +1,27 @@
+name: Stage acoustic expansion
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/v9/stage_orchestra_expansion.py'
+      - '.github/workflows/acoustic-expansion.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy soundfile
+      - run: python backend/v9/stage_orchestra_expansion.py staged 440300901dfe9275fd84e0b7763af1f8443ae62e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: acoustic-review-pack
+          path: staged/
+          retention-days: 7
+          if-no-files-found: error
